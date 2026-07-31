@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minha Agenda</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>📅 Minha Agenda</h1>
+      <p class="subtitle">Organize seus compromissos com facilidade</p>
+    </header>
+
+    <main class="app-main">
+      <section class="form-section">
+        <h2 id="form-title">Novo Compromisso</h2>
+        <form id="appointment-form">
+          <input type="hidden" id="appointment-id" />
+
+          <div class="field">
+            <label for="title">Título *</label>
+            <input type="text" id="title" placeholder="Ex: Reunião com cliente" required />
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="date">Data *</label>
+              <input type="date" id="date" required />
+            </div>
+            <div class="field">
+              <label for="time">Hora *</label>
+              <input type="time" id="time" required />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="location">Local</label>
+            <input type="text" id="location" placeholder="Ex: Escritório, Online..." />
+          </div>
+
+          <div class="field">
+            <label for="notes">Notas</label>
+            <textarea id="notes" rows="3" placeholder="Detalhes adicionais..."></textarea>
+          </div>
+
+          <div class="field">
+            <label for="category">Categoria</label>
+            <select id="category">
+              <option value="pessoal">Pessoal</option>
+              <option value="trabalho">Trabalho</option>
+              <option value="saude">Saúde</option>
+              <option value="estudo">Estudo</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" id="submit-btn" class="btn btn-primary">Adicionar Compromisso</button>
+            <button type="button" id="cancel-edit-btn" class="btn btn-secondary hidden">Cancelar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="list-section">
+        <div class="list-header">
+          <h2>Compromissos</h2>
+          <div class="controls">
+            <input type="search" id="search-input" placeholder="Buscar..." />
+            <select id="filter-select">
+              <option value="all">Todos</option>
+              <option value="upcoming">Próximos</option>
+              <option value="today">Hoje</option>
+              <option value="past">Passados</option>
+            </select>
+          </div>
+        </div>
+        <div id="empty-state" class="empty-state hidden">
+          <p>Nenhum compromisso encontrado.</p>
+          <p class="empty-hint">Adicione um novo compromisso usando o formulário ao lado.</p>
+        </div>
+        <ul id="appointment-list" class="appointment-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
