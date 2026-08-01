@@ -564,7 +564,8 @@
   .week-col .wc-head { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
   .week-col.is-today { border-color: var(--accent); }
   .week-col.is-today .wc-head { color: var(--accent); font-weight: 700; }
-  .wc-item { font-size: 0.76rem; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); margin-bottom: 5px; border-left: 3px solid var(--dot, var(--accent)); }
+  .wc-item { font-size: 0.76rem; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); margin-bottom: 5px; border-left: 3px solid var(--dot, var(--accent)); cursor: pointer; }
+  .wc-item:hover { filter: brightness(1.2); }
   .wc-item .wt { font-weight: 700; font-family: ui-monospace, monospace; }
 
   .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; width: 100%; }
@@ -586,7 +587,9 @@
     display: block; width: 100%; box-sizing: border-box;
     font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; background: var(--surface-2);
     border-left: 2px solid var(--dot, var(--accent)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer;
   }
+  .month-chip:hover { filter: brightness(1.2); }
   .month-more { font-size: 0.65rem; color: var(--text-faint); }
 
   @media (max-width: 560px) {
@@ -1498,10 +1501,12 @@
       var dISO = toISO(d);
       var isToday = dISO === todayISO();
       var col = el('<div class="week-col' + (isToday ? " is-today" : "") + '"></div>');
-      col.innerHTML = '<div class="wc-head"><span>' + DOW_SHORT[d.getDay()] + '</span><span class="mono">' + d.getDate() + '</span></div>';
+      col.appendChild(el('<div class="wc-head"><span>' + DOW_SHORT[d.getDay()] + '</span><span class="mono">' + d.getDate() + '</span></div>'));
       var dayItems = state.appointments.filter(function (a) { return a.date === dISO; }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
       dayItems.forEach(function (a) {
-        col.innerHTML += '<div class="wc-item" style="--dot:' + colorHex(a.color) + '"><span class="wt">' + a.time + '</span><br>' + escapeHtml(a.title) + '</div>';
+        var item = el('<div class="wc-item" style="--dot:' + colorHex(a.color) + '"><span class="wt">' + a.time + '</span><br>' + escapeHtml(a.title) + '</div>');
+        item.addEventListener("click", function (apptRef) { return function () { openAppointmentModal(apptRef); }; }(a));
+        col.appendChild(item);
       });
       grid.appendChild(col);
     }
@@ -1541,12 +1546,19 @@
       var dISO = toISO(d);
       var outside = d.getMonth() !== anchor.getMonth();
       var cell = el('<div class="month-cell' + (outside ? " outside" : "") + (dISO === today ? " is-today" : "") + '"></div>');
-      cell.innerHTML = '<div class="mc-num mono">' + d.getDate() + '</div>';
+      cell.appendChild(el('<div class="mc-num mono">' + d.getDate() + '</div>'));
       var dayItems = state.appointments.filter(function (a) { return a.date === dISO; }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
       dayItems.slice(0, 3).forEach(function (a) {
-        cell.innerHTML += '<div class="month-chip" style="--dot:' + colorHex(a.color) + '">' + a.time + ' ' + escapeHtml(a.title) + '</div>';
+        var chip = el('<div class="month-chip" style="--dot:' + colorHex(a.color) + '">' + a.time + ' ' + escapeHtml(a.title) + '</div>');
+        chip.addEventListener("click", function (apptRef) {
+          return function (e) {
+            e.stopPropagation();
+            openAppointmentModal(apptRef);
+          };
+        }(a));
+        cell.appendChild(chip);
       });
-      if (dayItems.length > 3) cell.innerHTML += '<div class="month-more">+' + (dayItems.length - 3) + ' mais</div>';
+      if (dayItems.length > 3) cell.appendChild(el('<div class="month-more">+' + (dayItems.length - 3) + ' mais</div>'));
       cell.addEventListener("click", function (dISOc) { return function () { ui.agendaMode = "day"; ui.dayAnchor = dISOc; renderView(); }; }(dISO));
       grid.appendChild(cell);
     }
