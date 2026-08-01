@@ -231,7 +231,7 @@
     background: color-mix(in srgb, var(--bar) 88%, transparent);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
-    padding: 14px 26px;
+    padding: calc(14px + env(safe-area-inset-top)) 26px 14px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -368,14 +368,14 @@
     width: 260px; max-width: 82vw; height: 100%;
     background: var(--sidebar);
     border-right: 1px solid var(--border);
-    padding: 20px 14px;
+    padding: calc(20px + env(safe-area-inset-top)) 14px 20px;
     display: flex; flex-direction: column; gap: 22px;
     position: relative;
     animation: drawer-slide-in 0.18s ease;
   }
   @keyframes drawer-slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
   .drawer-close-btn {
-    position: absolute; top: 14px; right: 14px;
+    position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px;
     border: none; background: var(--surface-2); border-radius: 50%;
     width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
     color: var(--text-muted);
