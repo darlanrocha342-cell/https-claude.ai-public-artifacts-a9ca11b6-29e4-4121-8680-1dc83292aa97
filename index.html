@@ -473,7 +473,7 @@
 
   .stat-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface-2);
@@ -483,10 +483,20 @@
     padding: 14px 10px;
     border-left: 1px solid var(--border);
     position: relative;
+    min-width: 0;
   }
   .stat-chip:first-child { border-left: none; }
-  .stat-chip .l { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .stat-chip .l {
+    font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+    line-height: 1.25; overflow-wrap: anywhere;
+  }
   .stat-chip .n { font-size: 1.28rem; font-weight: 700; }
+
+  @media (max-width: 480px) {
+    .stat-chip { padding: 10px 4px; }
+    .stat-chip .l { font-size: 0.62rem; letter-spacing: 0.01em; margin-bottom: 4px; }
+    .stat-chip .n { font-size: 1.1rem; }
+  }
 
   .progress-wrap { margin-top: 18px; }
   .progress-wrap .pl { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 6px; }
