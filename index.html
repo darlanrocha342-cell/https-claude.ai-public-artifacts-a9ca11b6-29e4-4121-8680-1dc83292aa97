@@ -823,6 +823,16 @@
 (function () {
   "use strict";
 
+  if (typeof window.supabase === "undefined") {
+    var bootEl = document.getElementById("boot-loading");
+    if (bootEl) {
+      bootEl.innerHTML =
+        '<div class="brand" style="justify-content:center;"><span class="mark"></span><span class="name">ÓRBITA</span></div>' +
+        '<p style="color:#ef5f5f;max-width:300px;text-align:center;">Não foi possível carregar os componentes necessários (bloqueado pela rede ou por um bloqueador de conteúdo). Tente em outro navegador ou verifique sua conexão.</p>';
+    }
+    return;
+  }
+
   /* ============ SUPABASE ============ */
   var SUPABASE_URL = "https://iltmpucfxbrdelimtvyf.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdG1wdWNmeGJyZGVsaW10dnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NjgzMjcsImV4cCI6MjEwMDM0NDMyN30.mj_A-ynPyC8ZIv0VwY7ig7jJai06bwSoU6zzkPxcqMs";
@@ -2271,6 +2281,13 @@
     e1.textContent = msg || "";
     e1.classList.toggle("hidden", !msg);
   }
+  function friendlyAuthErrorMessage(raw) {
+    var s = String(raw || "").toLowerCase();
+    if (s.indexOf("failed to fetch") !== -1 || s.indexOf("networkerror") !== -1 || s.indexOf("load failed") !== -1) {
+      return "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.";
+    }
+    return raw;
+  }
   function setAuthNotice(msg) {
     var e1 = document.getElementById("auth-notice");
     e1.textContent = msg || "";
@@ -2307,10 +2324,14 @@
     req.then(function (res) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
-      if (res.error) { setAuthError(res.error.message); return; }
+      if (res.error) { setAuthError(friendlyAuthErrorMessage(res.error.message)); return; }
       if (authMode === "signup" && res.data && !res.data.session) {
         setAuthNotice("Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.");
       }
+    }).catch(function () {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+      setAuthError("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.");
     });
   });
 
@@ -2344,6 +2365,9 @@
     var session = res.data && res.data.session;
     if (session && session.user) startAppFor(session.user);
     else stopApp();
+  }).catch(function () {
+    stopApp();
+    setAuthError("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.");
   });
 
   if ("serviceWorker" in navigator) {
