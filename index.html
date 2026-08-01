@@ -1014,6 +1014,43 @@
   function startOfWeek(d) { var r = new Date(d); r.setDate(r.getDate() - r.getDay()); return r; }
   function apptDateTime(a) { return new Date(a.date + "T" + (a.time || "00:00")); }
 
+  /* ============ RECURRENCE ============ */
+  var REPEAT_OPTIONS = [
+    { id: "none", label: "Não repete" },
+    { id: "daily", label: "Diariamente" },
+    { id: "weekly", label: "Semanalmente" },
+    { id: "monthly", label: "Mensalmente" },
+    { id: "yearly", label: "Anualmente" }
+  ];
+  function repeatLabel(id) {
+    var r = REPEAT_OPTIONS.filter(function (x) { return x.id === id; })[0];
+    return r ? r.label : "";
+  }
+  function appointmentOccursOn(a, dateISO) {
+    if (a.date === dateISO) return true;
+    if (!a.repeat || a.repeat === "none") return false;
+    if (dateISO < a.date) return false;
+    if (a.repeatUntil && dateISO > a.repeatUntil) return false;
+    var anchor = parseISO(a.date), target = parseISO(dateISO);
+    if (a.repeat === "daily") return true;
+    if (a.repeat === "weekly") return target.getDay() === anchor.getDay();
+    if (a.repeat === "monthly") return target.getDate() === anchor.getDate();
+    if (a.repeat === "yearly") return target.getDate() === anchor.getDate() && target.getMonth() === anchor.getMonth();
+    return false;
+  }
+  function appointmentsOnDate(dateISO) {
+    return state.appointments.filter(function (a) { return appointmentOccursOn(a, dateISO); });
+  }
+  function expandUpcomingOccurrences(horizonDays) {
+    var out = [];
+    var start = new Date(); start.setHours(0, 0, 0, 0);
+    for (var i = 0; i < horizonDays; i++) {
+      var dISO = toISO(addDays(start, i));
+      appointmentsOnDate(dISO).forEach(function (a) { out.push(Object.assign({}, a, { date: dISO })); });
+    }
+    return out;
+  }
+
   /* ============ THEME COLOR HELPERS ============ */
   function relLuminance(hex) {
     var c = hex.replace("#", "");
@@ -1271,11 +1308,11 @@
     var name = state.settings.name || "";
     var today = todayISO();
 
-    var todaysAppts = state.appointments.filter(function (a) { return a.date === today; })
+    var todaysAppts = appointmentsOnDate(today).map(function (a) { return Object.assign({}, a, { date: today }); })
       .sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
     var pendingTasks = state.tasks.filter(function (t) { return !t.done; })
       .sort(function (a, b) { return (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1; });
-    var nextAppt = state.appointments
+    var nextAppt = expandUpcomingOccurrences(60)
       .filter(function (a) { return apptDateTime(a) >= now; })
       .sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); })[0];
 
@@ -1417,9 +1454,7 @@
   function colorHex(id) { return (CATEGORY_COLORS.filter(function (c) { return c.id === id; })[0] || CATEGORY_COLORS[0]).hex; }
 
   function agendaList() {
-    var now = new Date();
-    var items = state.appointments.slice().sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); })
-      .filter(function (a) { return apptDateTime(a) >= new Date(now.getFullYear(), now.getMonth(), now.getDate()); });
+    var items = expandUpcomingOccurrences(120).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
 
     if (items.length === 0) return emptyBlock("calendar", "Nenhum compromisso futuro", "Adicione um novo compromisso para começar a organizar sua agenda.");
 
@@ -1445,6 +1480,7 @@
       '<div class="tl-rail" style="--dot:' + colorHex(a.color) + '"></div>' +
       '<div class="tl-body"><div class="tt">' + escapeHtml(a.title) + '</div><div class="mt">' +
         priorityPill(a.priority) +
+        (a.repeat && a.repeat !== "none" ? '<span>🔁 ' + repeatLabel(a.repeat) + '</span>' : '') +
         (a.location ? '<span>📍 ' + escapeHtml(a.location) + '</span>' : '') +
         (a.notes ? '<span>' + escapeHtml(a.notes) + '</span>' : '') +
       '</div></div>' +
@@ -1468,7 +1504,7 @@
 
   function agendaDay() {
     var today = todayISO();
-    var items = state.appointments.filter(function (a) { return a.date === today; })
+    var items = appointmentsOnDate(today).map(function (a) { return Object.assign({}, a, { date: today }); })
       .sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
     var box = el('<div></div>');
     box.appendChild(el('<div class="day-group-head"><span class="dn mono">' + new Date().getDate() + '</span><span class="dl">' + capitalize(fmtFull(new Date())) + '</span></div>'));
@@ -1502,9 +1538,9 @@
       var isToday = dISO === todayISO();
       var col = el('<div class="week-col' + (isToday ? " is-today" : "") + '"></div>');
       col.appendChild(el('<div class="wc-head"><span>' + DOW_SHORT[d.getDay()] + '</span><span class="mono">' + d.getDate() + '</span></div>'));
-      var dayItems = state.appointments.filter(function (a) { return a.date === dISO; }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
+      var dayItems = appointmentsOnDate(dISO).map(function (a) { return Object.assign({}, a, { date: dISO }); }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
       dayItems.forEach(function (a) {
-        var item = el('<div class="wc-item" style="--dot:' + colorHex(a.color) + '"><span class="wt">' + a.time + '</span><br>' + escapeHtml(a.title) + '</div>');
+        var item = el('<div class="wc-item" style="--dot:' + colorHex(a.color) + '"><span class="wt">' + a.time + '</span>' + (a.repeat && a.repeat !== "none" ? ' 🔁' : '') + '<br>' + escapeHtml(a.title) + '</div>');
         item.addEventListener("click", function (apptRef) { return function () { openAppointmentModal(apptRef); }; }(a));
         col.appendChild(item);
       });
@@ -1547,9 +1583,9 @@
       var outside = d.getMonth() !== anchor.getMonth();
       var cell = el('<div class="month-cell' + (outside ? " outside" : "") + (dISO === today ? " is-today" : "") + '"></div>');
       cell.appendChild(el('<div class="mc-num mono">' + d.getDate() + '</div>'));
-      var dayItems = state.appointments.filter(function (a) { return a.date === dISO; }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
+      var dayItems = appointmentsOnDate(dISO).map(function (a) { return Object.assign({}, a, { date: dISO }); }).sort(function (a, b) { return apptDateTime(a) - apptDateTime(b); });
       dayItems.slice(0, 3).forEach(function (a) {
-        var chip = el('<div class="month-chip" style="--dot:' + colorHex(a.color) + '">' + a.time + ' ' + escapeHtml(a.title) + '</div>');
+        var chip = el('<div class="month-chip" style="--dot:' + colorHex(a.color) + '">' + a.time + (a.repeat && a.repeat !== "none" ? ' 🔁' : '') + ' ' + escapeHtml(a.title) + '</div>');
         chip.addEventListener("click", function (apptRef) {
           return function (e) {
             e.stopPropagation();
@@ -1572,7 +1608,12 @@
 
   function deleteAppointment(id) {
     var a = state.appointments.filter(function (x) { return x.id === id; })[0];
-    if (!a || !confirm('Excluir "' + a.title + '"?')) return;
+    if (!a) return;
+    var isRecurring = a.repeat && a.repeat !== "none";
+    var msg = isRecurring
+      ? 'Excluir "' + a.title + '" e todas as repetições (' + repeatLabel(a.repeat).toLowerCase() + ')?'
+      : 'Excluir "' + a.title + '"?';
+    if (!confirm(msg)) return;
     state.appointments = state.appointments.filter(function (x) { return x.id !== id; });
     persist(); renderView(); showToast("Compromisso excluído.");
   }
@@ -1580,13 +1621,21 @@
   /* ============ APPOINTMENT MODAL ============ */
   function openAppointmentModal(existing) {
     var isEdit = !!existing;
-    var a = existing || { id: null, title: "", date: todayISO(), time: "09:00", location: "", link: "", notes: "", color: "laranja", priority: "media" };
+    var a = existing || { id: null, title: "", date: todayISO(), time: "09:00", location: "", link: "", notes: "", color: "laranja", priority: "media", repeat: "none", repeatUntil: "" };
 
     var body =
       '<div class="field"><label>Título</label><input id="m-title" value="' + escapeHtml(a.title) + '" placeholder="Ex.: Reunião com cliente" /></div>' +
       '<div class="row2">' +
         '<div class="field"><label>Data</label><input id="m-date" type="date" value="' + a.date + '" /></div>' +
         '<div class="field"><label>Hora</label><input id="m-time" type="time" value="' + a.time + '" /></div>' +
+      '</div>' +
+      '<div class="row2">' +
+        '<div class="field"><label>Repetir</label><select id="m-repeat">' +
+          REPEAT_OPTIONS.map(function (r) { return '<option value="' + r.id + '"' + (r.id === (a.repeat || "none") ? " selected" : "") + '>' + r.label + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div class="field" id="m-repeat-until-wrap" style="' + ((a.repeat && a.repeat !== "none") ? "" : "display:none;") + '">' +
+          '<label>Repetir até (opcional)</label><input id="m-repeat-until" type="date" value="' + (a.repeatUntil || "") + '" min="' + a.date + '" />' +
+        '</div>' +
       '</div>' +
       '<div class="field"><label>Local</label><input id="m-location" value="' + escapeHtml(a.location || "") + '" placeholder="Escritório, Online..." /></div>' +
       '<div class="field"><label>Prioridade</label><select id="m-priority">' +
@@ -1613,6 +1662,10 @@
     });
     syncColor(a.color); colorRow.setAttribute("data-selected", a.color);
 
+    modal.querySelector("#m-repeat").addEventListener("change", function () {
+      modal.querySelector("#m-repeat-until-wrap").style.display = this.value === "none" ? "none" : "";
+    });
+
     if (isEdit) modal.querySelector("#m-delete").addEventListener("click", function () { closeModal(); deleteAppointment(a.id); });
 
     modal.querySelector("#m-save").addEventListener("click", function () {
@@ -1625,7 +1678,9 @@
         location: modal.querySelector("#m-location").value.trim(),
         priority: modal.querySelector("#m-priority").value,
         color: colorRow.getAttribute("data-selected"),
-        notes: modal.querySelector("#m-notes").value.trim()
+        notes: modal.querySelector("#m-notes").value.trim(),
+        repeat: modal.querySelector("#m-repeat").value,
+        repeatUntil: modal.querySelector("#m-repeat-until").value
       };
       if (isEdit) {
         var idx = state.appointments.findIndex(function (x) { return x.id === a.id; });
@@ -2215,7 +2270,11 @@
     var results = document.getElementById("search-results");
     if (!query) { results.classList.add("hidden"); results.innerHTML = ""; return; }
     var matches = [];
-    state.appointments.forEach(function (a) { if (a.title.toLowerCase().indexOf(query) !== -1) matches.push({ type: "Compromisso", label: a.title, sub: a.date.split("-").reverse().join("/") + " · " + a.time, view: "agenda" }); });
+    state.appointments.forEach(function (a) {
+      if (a.title.toLowerCase().indexOf(query) === -1) return;
+      var when = a.repeat && a.repeat !== "none" ? repeatLabel(a.repeat) : a.date.split("-").reverse().join("/");
+      matches.push({ type: "Compromisso", label: a.title, sub: when + " · " + a.time, view: "agenda" });
+    });
     state.tasks.forEach(function (t) { if (t.title.toLowerCase().indexOf(query) !== -1) matches.push({ type: "Tarefa", label: t.title, sub: t.done ? "Concluída" : "Pendente", view: "tasks" }); });
     state.habits.forEach(function (h) { if (h.name.toLowerCase().indexOf(query) !== -1) matches.push({ type: "Hábito", label: h.name, sub: h.category || "", view: "habits" }); });
     state.goals.forEach(function (g) { if (g.title.toLowerCase().indexOf(query) !== -1) matches.push({ type: "Meta", label: g.title, sub: g.progress + "% concluído", view: "goals" }); });
@@ -2235,11 +2294,14 @@
   /* ============ REMINDERS ============ */
   function checkReminders() {
     var now = new Date();
+    var today = todayISO();
     state.appointments.forEach(function (a) {
-      var when = apptDateTime(a);
+      if (!appointmentOccursOn(a, today)) return;
+      var when = new Date(today + "T" + a.time);
       var diffMin = (when - now) / 60000;
-      if (diffMin > 0 && diffMin <= 10 && state.settings.notifiedIds.indexOf(a.id) === -1) {
-        state.settings.notifiedIds.push(a.id);
+      var notifyKey = a.id + "|" + today;
+      if (diffMin > 0 && diffMin <= 10 && state.settings.notifiedIds.indexOf(notifyKey) === -1) {
+        state.settings.notifiedIds.push(notifyKey);
         persist();
         var msg = a.title + " às " + a.time + (a.location ? " · " + a.location : "");
         if ("Notification" in window && Notification.permission === "granted") {
