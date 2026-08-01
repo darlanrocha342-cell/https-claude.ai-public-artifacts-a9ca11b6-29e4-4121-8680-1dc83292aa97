@@ -1,4 +1,4 @@
-var CACHE_NAME = "orbita-cache-v1";
+var CACHE_NAME = "orbita-cache-v2";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -21,6 +21,22 @@ self.addEventListener("fetch", function (event) {
   var req = event.request;
   if (req.method !== "GET" || req.url.indexOf(self.location.origin) !== 0) return;
 
+  // Always prefer the network for the app shell itself, so a new deploy is
+  // picked up immediately instead of an old cached page sticking around.
+  if (req.mode === "navigate" || req.destination === "document") {
+    event.respondWith(
+      fetch(req)
+        .then(function (response) {
+          var copy = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) { cache.put(req, copy); });
+          return response;
+        })
+        .catch(function () { return caches.match(req); })
+    );
+    return;
+  }
+
+  // Static assets (icons, manifest): cache-first for speed, refreshed in the background.
   event.respondWith(
     caches.match(req).then(function (cached) {
       var networkFetch = fetch(req)
