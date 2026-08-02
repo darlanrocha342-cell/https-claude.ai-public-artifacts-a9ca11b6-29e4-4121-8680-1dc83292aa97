@@ -866,9 +866,46 @@
   var SUPABASE_URL = "https://iltmpucfxbrdelimtvyf.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdG1wdWNmeGJyZGVsaW10dnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NjgzMjcsImV4cCI6MjEwMDM0NDMyN30.mj_A-ynPyC8ZIv0VwY7ig7jJai06bwSoU6zzkPxcqMs";
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var VAPID_PUBLIC_KEY = "BM6FLzGs8j31a3Ktmfy1pXbK7XpnE66OOABF5xA7L5saFxTTNXlkFn6twlOoKKEvO9SJsnP6DM1UUfjvy7lbheY";
   var currentUser = null;
   var appStarted = false;
   var saveTimer = null;
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  }
+
+  function subscribeToPush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !currentUser) {
+      return Promise.resolve(false);
+    }
+    return navigator.serviceWorker.ready
+      .then(function (reg) {
+        return reg.pushManager.getSubscription().then(function (existing) {
+          if (existing) return existing;
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+          });
+        });
+      })
+      .then(function (sub) {
+        var json = sub.toJSON();
+        return sb.from("push_subscriptions").upsert({
+          user_id: currentUser.id,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth
+        }, { onConflict: "endpoint" });
+      })
+      .then(function (res) { return !(res && res.error); })
+      .catch(function () { return false; });
+  }
 
   /* ============ ICONS ============ */
   var ICONS = {
@@ -953,7 +990,7 @@
   /* ============ STATE / STORAGE ============ */
   function defaultState() {
     return {
-      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null },
+      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null, timezone: "" },
       appointments: [],
       tasks: [],
       habits: [],
@@ -2184,16 +2221,25 @@
     grid.appendChild(renderThemeCard());
 
     var notifCard = el('<div class="card settings-row"></div>');
-    notifCard.innerHTML = '<div><div class="sl">Notificações do navegador</div><div class="sd">Alerta 10 min antes de cada compromisso, enquanto o ÓRBITA estiver aberto.</div></div>';
+    notifCard.innerHTML = '<div><div class="sl">Notificações push</div><div class="sd">Alerta 10 min antes de cada compromisso, direto na tela do celular — mesmo com o app fechado.</div></div>';
     var notifBtn = el('<button class="btn btn-ghost btn-sm"></button>');
     function updateNotifBtn() {
       var perm = ("Notification" in window) ? Notification.permission : "unsupported";
       notifBtn.textContent = perm === "granted" ? "Ativado" : perm === "denied" ? "Bloqueado" : "Ativar";
+      notifBtn.disabled = perm === "denied";
     }
     updateNotifBtn();
     notifBtn.addEventListener("click", function () {
-      if (!("Notification" in window)) { showToast("Seu navegador não suporta notificações."); return; }
-      Notification.requestPermission().then(function () { updateNotifBtn(); });
+      if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        showToast("Seu navegador não suporta notificações push."); return;
+      }
+      Notification.requestPermission().then(function (perm) {
+        updateNotifBtn();
+        if (perm !== "granted") return;
+        subscribeToPush().then(function (ok) {
+          showToast(ok ? "Notificações ativadas." : "Não foi possível ativar as notificações. Tente novamente.");
+        });
+      });
     });
     notifCard.appendChild(notifBtn);
     grid.appendChild(notifCard);
@@ -2292,6 +2338,9 @@
   }
 
   /* ============ REMINDERS ============ */
+  // A notificação real (que funciona com o app fechado) é enviada pelo
+  // servidor via Web Push. Isto aqui só mostra um aviso na tela quando o
+  // app já está aberto, sem duplicar a notificação do sistema.
   function checkReminders() {
     var now = new Date();
     var today = todayISO();
@@ -2304,9 +2353,6 @@
         state.settings.notifiedIds.push(notifyKey);
         persist();
         var msg = a.title + " às " + a.time + (a.location ? " · " + a.location : "");
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification("ÓRBITA — compromisso em breve", { body: msg });
-        }
         showReminderBanner(a.title, msg);
       }
     });
@@ -2441,6 +2487,13 @@
       state = defaultState();
       showToast("Não foi possível carregar seus dados. Confirme se o SQL de configuração foi executado no Supabase.");
     }).then(function () {
+      try {
+        var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz && state.settings.timezone !== tz) { state.settings.timezone = tz; persist(); }
+      } catch (e) {}
+      if ("Notification" in window && Notification.permission === "granted") {
+        subscribeToPush();
+      }
       showBootLoading(false);
       showAuthScreen(false);
       if (!appStarted) { appStarted = true; init(); }

@@ -1,4 +1,4 @@
-var CACHE_NAME = "orbita-cache-v2";
+var CACHE_NAME = "orbita-cache-v3";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -49,6 +49,37 @@ self.addEventListener("fetch", function (event) {
         })
         .catch(function () { return cached; });
       return cached || networkFetch;
+    })
+  );
+});
+
+// Real push notifications: shown by the OS even with the app fully closed,
+// since this runs in the service worker, not the page.
+self.addEventListener("push", function (event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  var title = data.title || "ÓRBITA";
+  var options = {
+    body: data.body || "",
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+    tag: data.tag || "orbita-reminder-" + Date.now(),
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+    data: { url: data.url || "./" }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || "./";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        if ("focus" in list[i]) return list[i].focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });
