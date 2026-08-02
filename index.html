@@ -740,16 +740,33 @@
   .toast.hidden { opacity: 0; transform: translateX(-50%) translateY(8px); pointer-events: none; }
 
   .reminder-banner {
-    position: fixed; top: 16px; right: 16px; max-width: 320px;
-    background: var(--surface); border: 1px solid var(--accent);
-    border-radius: var(--radius); box-shadow: var(--shadow-lg);
-    padding: 13px 15px; z-index: 200;
+    position: fixed; top: 16px; right: 16px; left: 16px; max-width: 360px; margin-left: auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow-lg);
+    padding: 12px 14px; z-index: 200;
     display: flex; gap: 10px; align-items: flex-start;
+    animation: rb-in 0.22s ease-out;
   }
-  .reminder-banner svg { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
-  .reminder-banner .rb-title { font-weight: 700; font-size: 0.86rem; }
-  .reminder-banner .rb-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
-  .reminder-banner .rb-close { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--text-faint); }
+  @keyframes rb-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+  .reminder-banner .rb-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .reminder-banner .rb-body { flex: 1; min-width: 0; padding-right: 14px; }
+  .reminder-banner .rb-app-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em;
+    margin-bottom: 2px;
+  }
+  .reminder-banner .rb-app-name { font-weight: 700; }
+  .reminder-banner .rb-title { font-weight: 700; font-size: 0.87rem; }
+  .reminder-banner .rb-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; word-break: break-word; }
+  .reminder-banner .rb-close {
+    position: absolute; top: 8px; right: 8px; border: none; background: none;
+    color: var(--text-faint); cursor: pointer; padding: 3px; border-radius: 6px;
+  }
+  .reminder-banner .rb-close:hover { background: var(--surface-2); }
+  @media (max-width: 420px) { .reminder-banner { right: 10px; left: 10px; max-width: none; } }
 
   .hidden { display: none !important; }
 
@@ -990,7 +1007,7 @@
   /* ============ STATE / STORAGE ============ */
   function defaultState() {
     return {
-      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null, timezone: "" },
+      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null, timezone: "", voiceEnabled: true },
       appointments: [],
       tasks: [],
       habits: [],
@@ -2244,6 +2261,23 @@
     notifCard.appendChild(notifBtn);
     grid.appendChild(notifCard);
 
+    var voiceCard = el('<div class="card settings-row"></div>');
+    voiceCard.innerHTML = '<div><div class="sl">Aviso por voz</div><div class="sd">Fala o compromisso em voz alta quando o lembrete aparece na tela.</div></div>';
+    var voiceBtn = el('<button class="btn btn-ghost btn-sm"></button>');
+    function updateVoiceBtn() {
+      var supported = "speechSynthesis" in window;
+      voiceBtn.textContent = !supported ? "Indisponível" : state.settings.voiceEnabled ? "Ativado" : "Desativado";
+      voiceBtn.disabled = !supported;
+    }
+    updateVoiceBtn();
+    voiceBtn.addEventListener("click", function () {
+      state.settings.voiceEnabled = !state.settings.voiceEnabled;
+      persist(); updateVoiceBtn();
+      if (state.settings.voiceEnabled) speakReminder("Aviso por voz ativado.");
+    });
+    voiceCard.appendChild(voiceBtn);
+    grid.appendChild(voiceCard);
+
     var exportCard = el('<div class="card settings-row"></div>');
     exportCard.innerHTML = '<div><div class="sl">Exportar dados</div><div class="sd">Baixe um backup de tudo em JSON.</div></div>';
     var exportBtn = el('<button class="btn btn-ghost btn-sm">' + ic("download", 14) + '</button>');
@@ -2339,8 +2373,9 @@
 
   /* ============ REMINDERS ============ */
   // A notificação real (que funciona com o app fechado) é enviada pelo
-  // servidor via Web Push. Isto aqui só mostra um aviso na tela quando o
-  // app já está aberto, sem duplicar a notificação do sistema.
+  // servidor via Web Push. Isto aqui mostra um aviso na tela, no estilo de
+  // uma notificação de app (ícone + título + hora) e também anuncia por
+  // voz, para quando o app já está aberto.
   function checkReminders() {
     var now = new Date();
     var today = todayISO();
@@ -2352,8 +2387,9 @@
       if (diffMin > 0 && diffMin <= 10 && state.settings.notifiedIds.indexOf(notifyKey) === -1) {
         state.settings.notifiedIds.push(notifyKey);
         persist();
-        var msg = a.title + " às " + a.time + (a.location ? " · " + a.location : "");
-        showReminderBanner(a.title, msg);
+        var sub = a.time + (a.location ? " · " + a.location : "");
+        showReminderBanner(a.title, sub);
+        speakReminder("Lembrete: " + a.title + (a.location ? ", em " + a.location : "") + ", às " + a.time + ".");
       }
     });
   }
@@ -2361,13 +2397,27 @@
   function showReminderBanner(title, sub) {
     var root = document.getElementById("reminder-root");
     var b = el(
-      '<div class="reminder-banner">' + ic("bell", 18) +
-      '<div><div class="rb-title">' + escapeHtml(title) + '</div><div class="rb-sub">' + escapeHtml(sub) + '</div></div>' +
-      '<button class="rb-close">' + ic("x", 13) + '</button></div>'
+      '<div class="reminder-banner">' +
+        '<img class="rb-icon" src="icons/icon-192.png" alt="" />' +
+        '<div class="rb-body">' +
+          '<div class="rb-app-row"><span class="rb-app-name">ÓRBITA</span><span class="rb-app-time">agora</span></div>' +
+          '<div class="rb-title">' + escapeHtml(title) + '</div>' +
+          '<div class="rb-sub">' + escapeHtml(sub) + '</div>' +
+        '</div>' +
+        '<button class="rb-close">' + ic("x", 13) + '</button>' +
+      '</div>'
     );
     b.querySelector(".rb-close").addEventListener("click", function () { b.remove(); });
     root.appendChild(b);
     setTimeout(function () { if (b.parentNode) b.remove(); }, 12000);
+  }
+
+  function speakReminder(text) {
+    if (!state.settings.voiceEnabled || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "pt-BR";
+    window.speechSynthesis.speak(utter);
   }
 
   /* ============ EVENTS ============ */
