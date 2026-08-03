@@ -3349,6 +3349,27 @@
         trySpeakPendingReminder();
       }
     });
+
+    // Quando não havia nenhuma janela do app aberta, o service worker abre
+    // uma nova passando os dados do lembrete pela própria URL (não dá pra
+    // mandar postMessage pra uma página que ainda nem carregou) — lemos
+    // esses parâmetros aqui assim que o app inicia.
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get("speak") !== "1") return;
+      var apptTitle = params.get("apptTitle") || "";
+      if (apptTitle) {
+        pendingSpeakReminder = {
+          apptTitle: apptTitle,
+          apptTime: params.get("apptTime") || "",
+          apptLocation: params.get("apptLocation") || ""
+        };
+        trySpeakPendingReminder();
+      }
+      params.delete("speak"); params.delete("apptTitle"); params.delete("apptTime"); params.delete("apptLocation");
+      var cleanQs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (cleanQs ? "?" + cleanQs : ""));
+    })();
   }
 })();
 </script>

@@ -1,4 +1,4 @@
-var CACHE_NAME = "orbita-cache-v3";
+var CACHE_NAME = "orbita-cache-v4";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -66,20 +66,50 @@ self.addEventListener("push", function (event) {
     tag: data.tag || "orbita-reminder-" + Date.now(),
     vibrate: [200, 100, 200],
     requireInteraction: false,
-    data: { url: data.url || "./" }
+    // Guardamos os dados do compromisso aqui pra poder falar em voz alta
+    // assim que o usuário tocar na notificação (ver notificationclick abaixo)
+    // — um celular travado não deixa nenhum app tocar áudio customizado
+    // vindo direto da notificação, então a fala só acontece quando o app
+    // realmente abre/ganha foco.
+    data: {
+      url: data.url || "./",
+      apptTitle: data.apptTitle || "",
+      apptTime: data.apptTime || "",
+      apptLocation: data.apptLocation || ""
+    }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  var url = (event.notification.data && event.notification.data.url) || "./";
+  var data = event.notification.data || {};
+  var url = data.url || "./";
+  var speakMsg = data.apptTitle
+    ? { type: "speak-reminder", apptTitle: data.apptTitle, apptTime: data.apptTime, apptLocation: data.apptLocation }
+    : null;
+
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
-        if ("focus" in list[i]) return list[i].focus();
+        if ("focus" in list[i]) {
+          if (speakMsg) list[i].postMessage(speakMsg);
+          return list[i].focus();
+        }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) {
+        // Não há janela aberta pra mandar a mensagem: a página ainda vai
+        // carregar, então passamos os dados pela própria URL — o app lê
+        // esses parâmetros assim que inicia e fala o lembrete.
+        if (speakMsg) {
+          var qs = "speak=1"
+            + "&apptTitle=" + encodeURIComponent(data.apptTitle || "")
+            + "&apptTime=" + encodeURIComponent(data.apptTime || "")
+            + "&apptLocation=" + encodeURIComponent(data.apptLocation || "");
+          url += (url.indexOf("?") === -1 ? "?" : "&") + qs;
+        }
+        return clients.openWindow(url);
+      }
     })
   );
 });
