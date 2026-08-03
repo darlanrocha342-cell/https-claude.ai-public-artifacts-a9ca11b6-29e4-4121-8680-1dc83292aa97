@@ -228,6 +228,45 @@ function fmtDateBR(iso?: string): string {
   return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
 }
 
+// Às vezes o modelo escreve uma confirmação ("Prontinho, marquei!") sem
+// realmente chamar a function que grava o compromisso — o usuário ouve que
+// deu certo, mas nada foi salvo. Isso é detectado comparando o texto da
+// resposta com esses verbos de confirmação; se bater e nenhuma function foi
+// chamada, fazemos uma segunda chamada pedindo pra IA agir de verdade (ou
+// admitir o que falta) em vez de deixar a confirmação falsa passar.
+const FALSE_CONFIRMATION_HINTS = /marquei|marcado|agend(ei|ado)|cri(ei|ado)|adicion(ei|ado)|atualiz(ei|ado)|exclu[íi]|apagu(ei|ado)|delet(ei|ado)|remov(i|ido)|prontinho|pronto[,!.]|feito[!.]/i;
+
+async function chatCompletion(messages: Array<{ role: string; content: string }>) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+      temperature: 0.4,
+      max_tokens: 300,
+    }),
+  });
+  if (!res.ok) {
+    console.error("OpenAI chat error:", res.status, await res.text());
+    return null;
+  }
+  return await res.json();
+}
+
+function parseToolCalls(toolCalls: Array<{ function: { name: string; arguments: string } }>) {
+  return toolCalls.map((tc) => {
+    let args = {};
+    try { args = JSON.parse(tc.function.arguments || "{}"); } catch (_e) { /* ignore malformed args */ }
+    return { name: tc.function.name, arguments: args };
+  });
+}
+
 // Reserva usada só se a IA, por algum motivo, chamar uma function sem
 // escrever nenhum texto de confirmação — descreve especificamente o que foi
 // feito em vez de uma frase genérica, pra o usuário sempre saber o que
@@ -342,41 +381,40 @@ Deno.serve(async (req) => {
       { role: "user", content: transcript },
     ];
 
-    const chatRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        messages,
-        tools: TOOLS,
-        tool_choice: "auto",
-        temperature: 0.4,
-        max_tokens: 250,
-      }),
-    });
-
-    if (!chatRes.ok) {
-      const errText = await chatRes.text();
-      console.error("OpenAI chat error:", chatRes.status, errText);
+    const chatData = await chatCompletion(messages);
+    if (!chatData) {
       return new Response(JSON.stringify({ transcript, error: "O assistente não respondeu. Tente novamente." }), {
         status: 502,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
 
-    const chatData = await chatRes.json();
-    const choice = chatData.choices?.[0]?.message;
-    const answer: string | null = choice?.content || null;
-    const toolCalls = choice?.tool_calls || [];
+    let choice = chatData.choices?.[0]?.message;
+    let answer: string | null = choice?.content || null;
+    let toolCalls = choice?.tool_calls || [];
 
-    const actions = toolCalls.map((tc: { function: { name: string; arguments: string } }) => {
-      let args = {};
-      try { args = JSON.parse(tc.function.arguments || "{}"); } catch (_e) { /* ignore malformed args */ }
-      return { name: tc.function.name, arguments: args };
-    });
+    // Confirmação falsa detectada: a IA disse que fez algo mas não chamou
+    // nenhuma function. Dá uma segunda chance, agora avisando explicitamente
+    // desse problema, em vez de deixar o usuário achar que funcionou.
+    if (toolCalls.length === 0 && answer && FALSE_CONFIRMATION_HINTS.test(answer)) {
+      const retryMessages = [
+        ...messages,
+        { role: "assistant", content: answer },
+        {
+          role: "system",
+          content: "Você escreveu uma confirmação de que marcou, atualizou ou excluiu algo, mas não chamou nenhuma function — isso faria o usuário achar que algo foi feito quando na verdade nada foi salvo. Se você já tem todas as informações necessárias (pelo menos título, data e hora para compromissos), chame a function correspondente AGORA. Se realmente falta alguma informação, responda de novo pedindo especificamente o que falta, sem afirmar que a ação já foi feita.",
+        },
+      ];
+      const retryData = await chatCompletion(retryMessages);
+      const retryChoice = retryData?.choices?.[0]?.message;
+      if (retryChoice) {
+        choice = retryChoice;
+        answer = retryChoice.content || answer;
+        toolCalls = retryChoice.tool_calls || [];
+      }
+    }
+
+    const actions = parseToolCalls(toolCalls);
 
     // 3) Converter a resposta em áudio (Text-to-Speech). O usuário sempre
     // precisa ser avisado do que foi feito — se a IA chamou a function sem
