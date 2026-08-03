@@ -17,6 +17,7 @@
 // Supabase em toda Edge Function — não precisa configurar.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildDateReferenceBlock, weekdayNamePt } from "../_shared/date-reference.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -153,7 +154,10 @@ function buildSystemPrompt(context: Record<string, unknown>): string {
     "Para update/delete, use o campo 'id' exato do compromisso/tarefa no contexto — nunca invente um id.",
     "Datas estão no formato AAAA-MM-DD e horas no formato 24h HH:MM. Responda sempre em português do Brasil.",
     "",
-    "Hoje é " + context.today + ", agora são " + context.nowTime + " (fuso horário: " + context.timezone + ").",
+    "Hoje é " + weekdayNamePt(context.today as string) + ", " + context.today + ", agora são " + context.nowTime + " (fuso horário: " + context.timezone + ").",
+    "",
+    "REGRA CRÍTICA SOBRE DATAS: você erra dia da semana com frequência se calcular de cabeça — é PROIBIDO calcular datas mentalmente. Toda vez que o usuário mencionar um dia (hoje, amanhã, um dia da semana, 'semana que vem', 'daqui a N dias', uma data por extenso, etc.), converta usando EXCLUSIVAMENTE a tabela abaixo, que já traz a data certa AAAA-MM-DD de cada dia da semana nas próximas semanas. Nunca invente nem deduza — procure a linha correspondente na tabela:",
+    buildDateReferenceBlock(context.today as string),
     "",
     "Compromissos (repeat indica recorrência: none, daily, weekly, monthly, yearly):",
     JSON.stringify(appts),
