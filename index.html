@@ -2664,8 +2664,11 @@
     };
   }
 
+  // "coral" e "ash" são as vozes mais novas e naturais do catálogo da
+  // OpenAI (mesma geração do modelo gpt-4o-mini-tts) — substituem as vozes
+  // mais antigas (nova/onyx), que soam mais robóticas.
   function ttsVoiceForGender() {
-    return state.settings.aiVoiceGender === "masculina" ? "onyx" : "nova";
+    return state.settings.aiVoiceGender === "masculina" ? "ash" : "coral";
   }
 
   function ttsSpeedValue() {
