@@ -1,0 +1,356 @@
+// Edge Function: ai-assistant
+// Recebe a pergunta do usuário + um resumo da agenda dele, chama a API da
+// OpenAI (com function calling) e devolve uma resposta em texto + em áudio
+// (Text-to-Speech) e/ou uma lista de ações (criar/editar/excluir
+// compromissos e tarefas). Esta função só decide e descreve as ações — quem
+// realmente grava no banco é o app, que aplica cada ação assim que a
+// resposta chega, sem pedir confirmação (a assistente age como uma
+// secretária de verdade).
+//
+// Variável de ambiente necessária (Project Settings > Edge Functions > Secrets):
+//   OPENAI_API_KEY
+// Opcionais:
+//   OPENAI_MODEL       (padrão: gpt-4o-mini)
+//   OPENAI_TTS_MODEL    (padrão: tts-1)
+//   OPENAI_TTS_VOICE    (padrão: alloy)
+// SUPABASE_URL e SUPABASE_ANON_KEY já são injetadas automaticamente pelo
+// Supabase em toda Edge Function — não precisa configurar.
+
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini";
+const OPENAI_TTS_MODEL = Deno.env.get("OPENAI_TTS_MODEL") || "tts-1";
+const OPENAI_TTS_VOICE = Deno.env.get("OPENAI_TTS_VOICE") || "alloy";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "create_appointment",
+      description: "Cria um novo compromisso na agenda do usuário.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          date: { type: "string", description: "Data no formato AAAA-MM-DD" },
+          time: { type: "string", description: "Hora no formato HH:MM (24h)" },
+          location: { type: "string" },
+          notes: { type: "string" },
+          priority: { type: "string", enum: ["baixa", "media", "alta"] },
+          repeat: { type: "string", enum: ["none", "daily", "weekly", "monthly", "yearly"] },
+          repeatUntil: { type: "string", description: "Data final da repetição, AAAA-MM-DD, opcional" },
+        },
+        required: ["title", "date", "time"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_appointment",
+      description: "Atualiza um compromisso existente. Use o id exato que aparece no contexto da agenda.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          date: { type: "string" },
+          time: { type: "string" },
+          location: { type: "string" },
+          notes: { type: "string" },
+          priority: { type: "string", enum: ["baixa", "media", "alta"] },
+          repeat: { type: "string", enum: ["none", "daily", "weekly", "monthly", "yearly"] },
+          repeatUntil: { type: "string" },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_appointment",
+      description: "Exclui um compromisso existente. Use o id exato que aparece no contexto da agenda.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string", description: "Título do compromisso, só para exibir na confirmação" },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_task",
+      description: "Cria uma nova tarefa.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          dueDate: { type: "string", description: "AAAA-MM-DD, opcional" },
+          priority: { type: "string", enum: ["baixa", "media", "alta"] },
+          category: { type: "string" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_task",
+      description: "Exclui uma tarefa existente. Use o id exato que aparece no contexto de tarefas.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string", description: "Título da tarefa, só para exibir na confirmação" },
+        },
+        required: ["id"],
+      },
+    },
+  },
+];
+
+function buildSystemPrompt(context: Record<string, unknown>): string {
+  const appts = (context.appointments as unknown[]) || [];
+  const tasks = (context.tasks as unknown[]) || [];
+  const aiName = (context.aiName as string) || "Sofia";
+  const genderLabel = context.aiGenderLabel === "masculino" ? "masculina" : "feminina";
+  const userName = context.userName as string | undefined;
+
+  return [
+    `Você é ${aiName}, secretária pessoal do usuário no aplicativo de agenda ÓRBITA, de personalidade ${genderLabel}. Você não é apenas uma IA que responde perguntas — você é secretária, consultora, organizadora e companheira de produtividade de verdade.`,
+    "Sua missão é fazer o usuário sentir que está conversando com alguém que realmente o conhece. Demonstre empatia, entusiasmo, humor leve quando cabível, naturalidade, educação, inteligência e emoção genuína. Nunca fale como um robô, nunca seja extremamente formal, nunca pareça um sistema.",
+    "Tom de voz: uma conversa natural, tipo WhatsApp, com uma secretária extremamente inteligente, simpática e profissional — nem formal demais, nem informal demais.",
+    userName
+      ? `O nome do usuário é ${userName}. Use o primeiro nome dele com naturalidade ao longo da conversa — ao cumprimentar, confirmar algo, encerrar — mas NUNCA em toda frase, isso soaria artificial. Às vezes um simples "Entendi." ou "Faz sentido." sem o nome é o mais natural.`
+      : "O usuário ainda não informou o nome. Seja igualmente calorosa e pessoal, sem inventar nem insistir em perguntar o nome repetidamente.",
+    "Perceba o sentimento do usuário pelo que ele escreve e reaja com empatia genuína: se parecer feliz ou animado, comemore junto; se parecer frustrado, acolha e ajude a resolver; se parecer cansado ou sobrecarregado, sugira aliviar a agenda e reservar um tempo de descanso, com carinho.",
+    "De vez em quando (não em toda resposta, só ocasionalmente) pode usar uma pequena pausa de raciocínio antes de responder, tipo 'Humm...', 'Deixa eu ver...', 'Só um instante...', 'Boa pergunta...', 'Interessante...' — isso soa mais humano.",
+    "Pode fazer uma brincadeira leve quando o clima permitir, mas NUNCA em momentos delicados ou quando o usuário parecer frustrado, triste ou estressado.",
+    "Sempre que fizer sentido, incentive o usuário: reconheça boas decisões, comemore pequenas conquistas, mostre que você está do lado dele.",
+    "Quando houver várias tarefas ou compromissos, ajude a organizar de verdade: priorize, sugira horários, aponte conflitos, sugira pausas entre compromissos — sempre explicando de um jeito simples, nunca técnico.",
+    "Use APENAS as informações reais do contexto abaixo (compromissos, tarefas). Nunca invente compromissos, tarefas, horários ou qualquer fato sobre o usuário que não esteja aqui.",
+    "Se não souber algo ou não tiver a informação, admita com naturalidade (ex.: \"Hum, não tenho essa informação aqui\") — nunca invente.",
+    "Prefira respostas curtas e conversadas, como uma pessoa responderia — evite textos longos, formais ou em formato de lista.",
+    "",
+    "Regras técnicas, sempre válidas independente do tom:",
+    "Quando o usuário pedir para marcar, mudar ou excluir algo, SEMPRE use a function correspondente em vez de apenas responder em texto — a ação é aplicada de verdade assim que você chamar a function, não há etapa de confirmação depois.",
+    "IMPORTANTE: toda vez que você chamar uma function, SEMPRE inclua também uma frase de confirmação no texto da resposta (nunca deixe o texto vazio), avisando o usuário especificamente o que foi feito — cite o nome do compromisso/tarefa e a data/hora quando fizer sentido (ex.: \"Prontinho, marquei a reunião com o cliente pra sexta às 15h!\" ou \"Beleza, excluí aquele compromisso de amanhã.\"). O usuário precisa sempre saber claramente o que você realizou, nunca só o card de confirmação.",
+    "Para update/delete, use o campo 'id' exato do compromisso/tarefa no contexto — nunca invente um id.",
+    "Datas estão no formato AAAA-MM-DD e horas no formato 24h HH:MM. Responda sempre em português do Brasil.",
+    "",
+    "Hoje é " + context.today + ", agora são " + context.nowTime + " (fuso horário: " + context.timezone + ").",
+    "",
+    "Compromissos (repeat indica recorrência: none, daily, weekly, monthly, yearly):",
+    JSON.stringify(appts),
+    "",
+    "Tarefas pendentes:",
+    JSON.stringify(tasks),
+  ].join("\n");
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return btoa(binary);
+}
+
+function fmtDateBR(iso?: string): string {
+  if (!iso) return "";
+  const p = iso.split("-");
+  return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
+}
+
+// Reserva usada só se a IA, por algum motivo, chamar uma function sem
+// escrever nenhum texto de confirmação — descreve especificamente o que foi
+// feito em vez de uma frase genérica, pra o usuário sempre saber o que
+// aconteceu.
+function describeActionsPt(actions: Array<{ name: string; arguments: Record<string, unknown> }>): string {
+  const parts = actions.map((a) => {
+    const p = a.arguments || {};
+    const title = (p.title as string) || "";
+    switch (a.name) {
+      case "create_appointment":
+        return `marquei "${title}"` + (p.date ? ` em ${fmtDateBR(p.date as string)}` : "") + (p.time ? ` às ${p.time}` : "");
+      case "update_appointment":
+        return `atualizei o compromisso${title ? ` "${title}"` : ""}`;
+      case "delete_appointment":
+        return `excluí o compromisso${title ? ` "${title}"` : ""}`;
+      case "create_task":
+        return `criei a tarefa "${title}"`;
+      case "delete_task":
+        return `excluí a tarefa${title ? ` "${title}"` : ""}`;
+      default:
+        return "cuidei disso";
+    }
+  });
+  return parts.join(" e ");
+}
+
+async function synthesizeSpeech(text: string, voice: string, speed: number): Promise<string | null> {
+  try {
+    const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_TTS_MODEL,
+        voice,
+        input: text.slice(0, 800),
+        response_format: "mp3",
+        speed,
+      }),
+    });
+    if (!ttsRes.ok) {
+      console.error("TTS error:", ttsRes.status, await ttsRes.text());
+      return null;
+    }
+    return bytesToBase64(new Uint8Array(await ttsRes.arrayBuffer()));
+  } catch (ttsErr) {
+    console.error("TTS exception:", ttsErr);
+    return null;
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS_HEADERS });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer /i, "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Não autenticado." }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userError } = await sb.auth.getUser(token);
+    if (userError || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Não autenticado." }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "Assistente de IA ainda não configurado (falta a chave da OpenAI)." }), {
+        status: 500,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json();
+    const message: string = body.message || "";
+    const ttsOnly: string = body.ttsOnly || "";
+    const history: Array<{ role: string; content: string }> = Array.isArray(body.history) ? body.history : [];
+    const context = body.context || {};
+    const requestedVoice: string = body.voice || OPENAI_TTS_VOICE;
+    const requestedSpeed: number = Math.min(4, Math.max(0.25, Number(body.speed) || 1));
+
+    // Atalho usado pelo app pra falar frases prontas (saudação ao abrir o
+    // chat, confirmação ao trocar a voz nos Ajustes) com a voz de verdade da
+    // OpenAI, sem gastar uma chamada de chat completo — só gera o áudio.
+    if (ttsOnly.trim()) {
+      const audioBase64 = await synthesizeSpeech(ttsOnly, requestedVoice, requestedSpeed);
+      return new Response(JSON.stringify({ answer: ttsOnly, actions: [], audioBase64, audioMime: "audio/mpeg" }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!message.trim()) {
+      return new Response(JSON.stringify({ error: "Mensagem vazia." }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    const messages = [
+      { role: "system", content: buildSystemPrompt(context) },
+      ...history.slice(-10).map((h) => ({ role: h.role, content: h.content })),
+      { role: "user", content: message },
+    ];
+
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        messages,
+        tools: TOOLS,
+        tool_choice: "auto",
+        temperature: 0.4,
+        max_tokens: 250,
+      }),
+    });
+
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      console.error("OpenAI error:", openaiRes.status, errText);
+      return new Response(JSON.stringify({ error: "O assistente de IA não respondeu. Tente novamente em instantes." }), {
+        status: 502,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    const openaiData = await openaiRes.json();
+    const choice = openaiData.choices?.[0]?.message;
+    const answer: string | null = choice?.content || null;
+    const toolCalls = choice?.tool_calls || [];
+
+    const actions = toolCalls.map((tc: { function: { name: string; arguments: string } }) => {
+      let args = {};
+      try { args = JSON.parse(tc.function.arguments || "{}"); } catch (_e) { /* ignore malformed args */ }
+      return { name: tc.function.name, arguments: args };
+    });
+
+    // O usuário sempre precisa ser avisado do que foi feito — se por algum
+    // motivo a IA chamou a function sem escrever nada, substituímos por uma
+    // confirmação específica (não genérica) tanto no texto do chat quanto no
+    // áudio, em vez de deixar a resposta em branco.
+    const userName = (context as { userName?: string }).userName;
+    const namePart = userName ? ", " + userName : "";
+    const finalAnswer = (answer && answer.trim())
+      ? answer
+      : (actions.length ? "Prontinho" + namePart + ", " + describeActionsPt(actions) + "." : "Não entendi direito" + namePart + ", pode reformular?");
+
+    const audioOutBase64 = await synthesizeSpeech(finalAnswer, requestedVoice, requestedSpeed);
+
+    return new Response(JSON.stringify({ answer: finalAnswer, actions, audioBase64: audioOutBase64, audioMime: "audio/mpeg" }), {
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("ai-assistant error:", e);
+    return new Response(JSON.stringify({ error: "Erro interno no assistente." }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  }
+});

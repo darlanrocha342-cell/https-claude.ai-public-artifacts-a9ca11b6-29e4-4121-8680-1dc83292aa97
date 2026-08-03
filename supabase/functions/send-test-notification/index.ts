@@ -1,135 +1,122 @@
-// Supabase Edge Function: send-test-notification
+// Edge Function: send-test-notification
+// Manda uma notificação push de teste NA HORA para o usuário autenticado,
+// sem depender de nenhum compromisso ou do agendamento de 1 em 1 minuto —
+// serve só pra confirmar rapidamente se a chave VAPID, a inscrição do
+// navegador e a entrega do push estão funcionando de verdade no celular.
 //
-// Sends a real Web Push notification to every device the calling user has
-// registered (rows in public.push_subscriptions), so they can confirm push
-// notifications actually reach their phone/desktop.
-//
-// Deploy:
-//   supabase functions deploy send-test-notification
-//
-// Required secrets (set once):
-//   supabase secrets set VAPID_PUBLIC_KEY=<same value as VAPID_PUBLIC_KEY in index.html>
-//   supabase secrets set VAPID_PRIVATE_KEY=<the matching private key>
-//   supabase secrets set VAPID_SUBJECT=mailto:you@example.com
-//
-// SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically by
-// the Supabase runtime — no need to set them yourself.
+// Variáveis de ambiente necessárias (Project Settings > Edge Functions > Secrets):
+//   VAPID_PUBLIC_KEY
+//   VAPID_PRIVATE_KEY
+//   VAPID_SUBJECT   (ex.: mailto:seuemail@exemplo.com)
+// SUPABASE_URL e SUPABASE_ANON_KEY já são injetadas automaticamente pelo
+// Supabase em toda Edge Function — não precisa configurar.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import webpush from "https://esm.sh/web-push@3.6.7";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
-const corsHeaders = {
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: CORS_HEADERS });
   }
 
   try {
-    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-    const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:no-reply@example.com";
-
-    if (!vapidPublicKey || !vapidPrivateKey) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY não configuradas nos secrets da função." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ ok: false, error: "Não autenticado." }), {
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer /i, "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Não autenticado." }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Client scoped to the caller's JWT, just to resolve who is calling.
-    const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: userData, error: userError } = await callerClient.auth.getUser();
+    const { data: userData, error: userError } = await sb.auth.getUser(token);
     if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ ok: false, error: "Usuário inválido." }), {
+      return new Response(JSON.stringify({ error: "Não autenticado." }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
-    const userId = userData.user.id;
 
-    // Service-role client to read/clean up subscriptions regardless of RLS.
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: subs, error: subsError } = await adminClient
+    const { data: subs, error: subsError } = await sb
       .from("push_subscriptions")
-      .select("id, endpoint, p256dh, auth")
-      .eq("user_id", userId);
+      .select("*")
+      .eq("user_id", userData.user.id);
 
-    if (subsError) {
-      return new Response(JSON.stringify({ ok: false, error: subsError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (subsError) throw subsError;
+
+    if (!subs || !subs.length) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Nenhuma inscrição de notificação encontrada. Vá em Ajustes e clique em Ativar notificações primeiro.",
+      }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
-    }
-    if (!subs || subs.length === 0) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Nenhuma inscrição de notificação encontrada para este usuário. Ative as notificações primeiro." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     const payload = JSON.stringify({
-      title: "ÓRBITA",
-      body: "Notificação de teste — se você está vendo isso, está tudo funcionando!",
+      title: "🔔 ÓRBITA — teste de notificação",
+      body: "Se você está vendo isso na tela do seu celular, as notificações estão funcionando!",
       url: "./",
-      tag: "orbita-test",
+      apptTitle: "Compromisso de teste",
+      apptTime: new Date().toTimeString().slice(0, 5),
+      apptLocation: "",
     });
 
     let sent = 0;
-    const staleIds: number[] = [];
-    for (const sub of subs) {
+    let lastError: string | null = null;
+
+    for (const s of subs) {
       try {
         await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          payload
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          payload,
         );
         sent++;
       } catch (err) {
-        // 404/410 = the browser unsubscribed or the endpoint expired; clean it up.
-        const status = err?.statusCode;
-        if (status === 404 || status === 410) staleIds.push(sub.id);
+        const statusCode = (err as { statusCode?: number }).statusCode;
+        lastError = `${statusCode ?? ""} ${(err as Error).message ?? err}`.trim();
+        if (statusCode === 404 || statusCode === 410) {
+          await sb.from("push_subscriptions").delete().eq("id", s.id);
+        }
       }
     }
 
-    if (staleIds.length > 0) {
-      await adminClient.from("push_subscriptions").delete().in("id", staleIds);
-    }
-
     if (sent === 0) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Todas as inscrições estavam expiradas. Desative e reative as notificações no app." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Não consegui entregar a notificação. Detalhe: " + (lastError || "motivo desconhecido") + ". Tente ativar as notificações de novo em Ajustes.",
+      }), {
+        status: 502,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ ok: true, sent }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
-  } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: err?.message || String(err) }), {
+  } catch (e) {
+    console.error("send-test-notification error:", e);
+    return new Response(JSON.stringify({ ok: false, error: "Erro interno: " + String(e) }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   }
 });

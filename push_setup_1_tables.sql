@@ -1,23 +1,6 @@
--- Execute no SQL Editor do seu projeto Supabase (Project > SQL Editor > New query)
+-- PASSO 1 de 3 — Execute no SQL Editor do Supabase (Project > SQL Editor > New query)
+-- Cria as tabelas necessárias para notificações push de verdade.
 
-create table if not exists public.app_state (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  data jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.app_state enable row level security;
-
-create policy "Users manage their own app state"
-  on public.app_state
-  for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- Notificações push: um dispositivo (endpoint) por linha, várias linhas por usuário
--- (celular, notebook, etc. contam como inscrições separadas).
--- Ver push_setup_1_tables.sql / NOTIFICACOES_PUSH_PASSO_A_PASSO.md para o
--- passo a passo completo de configuração (Edge Functions + cron).
 create table if not exists public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
