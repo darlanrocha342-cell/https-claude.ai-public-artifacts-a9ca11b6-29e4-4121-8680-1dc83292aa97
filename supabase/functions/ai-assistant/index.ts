@@ -17,7 +17,34 @@
 // Supabase em toda Edge Function — não precisa configurar.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { buildDateReferenceBlock, weekdayNamePt } from "../_shared/date-reference.ts";
+
+// Calcula datas em código (nunca deixe a IA calcular de cabeça — modelos
+// pequenos erram dia da semana com frequência, especialmente perto da
+// virada do mês/ano).
+const WEEKDAYS_PT = [
+  "domingo", "segunda-feira", "terça-feira", "quarta-feira",
+  "quinta-feira", "sexta-feira", "sábado",
+];
+function parseISODateUTC(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+}
+function weekdayNamePt(iso: string): string {
+  return WEEKDAYS_PT[parseISODateUTC(iso).getUTCDay()];
+}
+function buildDateReferenceBlock(todayISO: string, days = 21): string {
+  const base = parseISODateUTC(todayISO);
+  const lines: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const dt = new Date(base);
+    dt.setUTCDate(base.getUTCDate() + i);
+    const iso = dt.toISOString().slice(0, 10);
+    const weekday = WEEKDAYS_PT[dt.getUTCDay()];
+    const nickname = i === 0 ? "hoje" : i === 1 ? "amanhã" : null;
+    lines.push(`${iso} = ${weekday}${nickname ? " (" + nickname + ")" : ""}`);
+  }
+  return lines.join("\n");
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
