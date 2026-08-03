@@ -323,6 +323,13 @@
   }
   .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .avatar.avatar-lg { width: 56px; height: 56px; font-size: 1.3rem; cursor: default; }
+  .ai-voice-avatar-preview {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .ai-voice-avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   .avatar-crop-outer { display: flex; justify-content: center; margin-bottom: 16px; }
   .avatar-crop-circle {
@@ -357,6 +364,77 @@
   }
   .bottom-nav button svg.ic { color: var(--accent); }
   .bottom-nav button.active { color: var(--accent); }
+
+  /* ---------------- AI assistant ---------------- */
+  .ai-fab {
+    position: fixed; right: 20px; bottom: calc(24px + env(safe-area-inset-bottom));
+    width: 54px; height: 54px; border-radius: 50%; border: none;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 22px rgba(255,107,0,0.4);
+    z-index: 60; cursor: pointer; overflow: hidden;
+    padding: 0; margin: 0; box-sizing: border-box; font: inherit;
+    transition: transform 0.12s ease, filter 0.12s ease;
+  }
+  .ai-fab img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+  .ai-fab:hover { filter: brightness(1.1); }
+  .ai-fab:active { transform: scale(0.94); }
+  @media (max-width: 860px) { .ai-fab { bottom: calc(70px + env(safe-area-inset-bottom)); right: 16px; width: 50px; height: 50px; } }
+
+  .ai-panel {
+    position: fixed; right: 20px; bottom: calc(88px + env(safe-area-inset-bottom));
+    width: 380px; max-width: calc(100vw - 32px); height: 520px; max-height: 72vh;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); z-index: 95;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .ai-panel.hidden { display: none; }
+  @media (max-width: 860px) {
+    .ai-panel { right: 8px; left: 8px; width: auto; bottom: calc(126px + env(safe-area-inset-bottom)); height: 60vh; }
+  }
+  .ai-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 10px;
+  }
+  .ai-panel-head h3 { font-size: 0.95rem; margin: 0; }
+  .ai-panel-head p { margin: 1px 0 0; font-size: 0.72rem; color: var(--text-muted); }
+  .ai-panel-close { border: none; background: var(--surface-2); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-shrink: 0; }
+
+  .ai-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .ai-msg { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap; }
+  .ai-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 3px; }
+  .ai-msg.assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .ai-msg.error { align-self: flex-start; background: var(--danger-soft); color: var(--danger); }
+  .ai-typing { align-self: flex-start; font-size: 0.78rem; color: var(--text-muted); }
+
+  .ai-action-card {
+    align-self: flex-start; max-width: 92%; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+    font-size: 0.82rem; display: flex; flex-direction: column; gap: 8px;
+  }
+  .ai-action-card .aa-desc { line-height: 1.4; }
+  .ai-action-card .aa-status { font-size: 0.78rem; color: var(--good); font-weight: 600; }
+  .ai-action-card.aa-error .aa-status { color: var(--danger); }
+
+  .ai-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); flex-shrink: 0; align-items: center; }
+  .ai-input-wrap { position: relative; flex: 1; display: flex; align-items: center; }
+  .ai-input-wrap input {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 9px 40px 9px 12px; font-size: 0.85rem; color: var(--text);
+  }
+  .ai-input-row #ai-send { border: none; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-sm); width: 40px; height: 37px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ai-input-row #ai-send:disabled { opacity: 0.5; }
+  .ai-mic-btn {
+    position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+    width: 30px; height: 30px; border-radius: 50%; border: none;
+    background: transparent; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .ai-mic-btn.recording { background: var(--danger); color: #fff; animation: ai-mic-pulse 1.1s ease-in-out infinite; }
+  @keyframes ai-mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(209,60,60,0.45); } 50% { box-shadow: 0 0 0 8px rgba(209,60,60,0); } }
+  .ai-voice-hint { text-align: center; font-size: 0.72rem; color: var(--text-muted); padding: 0 12px 8px; margin-top: -4px; }
+  .ai-voice-hint.hidden { display: none; }
 
   /* ---------------- mobile drawer ---------------- */
   .mobile-drawer-backdrop {
@@ -426,6 +504,9 @@
     opacity: 0.12;
     pointer-events: none;
   }
+  /* Card mais "limpo" pro perfil da assistente — sem a faixa/brilho decorativos,
+     pra não competir visualmente com a foto/avatar. */
+  .ai-persona-card::before, .ai-persona-card::after { display: none; }
 
   .pill {
     display: inline-flex; align-items: center; gap: 5px;
@@ -838,11 +919,29 @@
       <button class="hamburger-btn" id="hamburger-btn" title="Menu" aria-label="Abrir menu"></button>
       <div class="avatar" id="avatar" title="Alterar foto de perfil">D</div>
       <input type="file" id="avatar-file-input" accept="image/*" style="display:none;" />
+      <input type="file" id="ai-avatar-file-input" accept="image/*" style="display:none;" />
     </header>
     <div class="view-root" id="view-root"></div>
   </div>
 
   <nav class="bottom-nav" id="bottom-nav"></nav>
+
+  <button class="ai-fab" id="ai-fab" title="Assistente IA" aria-label="Assistente IA"></button>
+  <div class="ai-panel hidden" id="ai-panel">
+    <div class="ai-panel-head">
+      <div><h3 id="ai-panel-name">Assistente ÓRBITA</h3><p>Pergunte sobre sua agenda ou peça para organizar.</p></div>
+      <button class="ai-panel-close" id="ai-panel-close" aria-label="Fechar"></button>
+    </div>
+    <div class="ai-messages" id="ai-messages"></div>
+    <p class="ai-voice-hint hidden" id="ai-voice-hint">Gravando… solte o microfone para enviar.</p>
+    <form class="ai-input-row" id="ai-form">
+      <div class="ai-input-wrap">
+        <input type="text" id="ai-input" placeholder="Ex.: tenho tempo livre amanhã?" autocomplete="off" />
+        <button type="button" id="ai-mic-btn" class="ai-mic-btn" aria-label="Segure para falar com o assistente"></button>
+      </div>
+      <button type="submit" id="ai-send" aria-label="Enviar"></button>
+    </form>
+  </div>
 </div>
 
 <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden">
@@ -949,7 +1048,12 @@
     dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
     trend: '<polyline points="3,17 9,10 13,14 21,5"/><polyline points="15,5 21,5 21,11"/>',
     menu: '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
-    palette: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16" cy="10" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/>'
+    palette: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16" cy="10" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/>',
+    sparkle: '<path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/>',
+    send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>',
+    mic: '<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>',
+    assistantFemale: '<circle cx="12" cy="8.2" r="4"/><path d="M7.6 9.7c-.9 1.6-.9 3.5 0 5.1M16.4 9.7c.9 1.6.9 3.5 0 5.1"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/><path d="M19 9.6a7 7 0 0 0-14 0"/><path d="M5 9.6v2.8a2 2 0 0 0 2 2h.6"/><path d="M19 9.6v2.8a2 2 0 0 1-2 2h-.6"/>',
+    assistantMale: '<circle cx="12" cy="8.2" r="4"/><path d="M8.6 5.8h6.8"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/><path d="M19 9.6a7 7 0 0 0-14 0"/><path d="M5 9.6v2.8a2 2 0 0 0 2 2h.6"/><path d="M19 9.6v2.8a2 2 0 0 1-2 2h-.6"/>'
   };
   function ic(name, size) {
     size = size || 18;
@@ -1007,7 +1111,7 @@
   /* ============ STATE / STORAGE ============ */
   function defaultState() {
     return {
-      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null, timezone: "", voiceEnabled: true },
+      settings: { name: "", theme: "system", notifiedIds: [], customColors: {}, avatarPhoto: null, timezone: "", aiVoiceGender: "feminina", aiAvatarPhoto: null, aiName: "Sofia", aiSpeechRate: "normal" },
       appointments: [],
       tasks: [],
       habits: [],
@@ -1187,7 +1291,15 @@
     });
   }
 
-  function openAvatarCropModal(file) {
+  function openAvatarCropModal(file, opts) {
+    opts = opts || {};
+    var title = opts.title || "Ajustar foto de perfil";
+    var onSave = opts.onSave || function (dataUrl) {
+      state.settings.avatarPhoto = dataUrl;
+      persist(); renderAvatar();
+      if (ui.view === "settings") renderView();
+      showToast("Foto de perfil atualizada.");
+    };
     if (!file || file.type.indexOf("image/") !== 0) { showToast("Selecione um arquivo de imagem."); return; }
     var reader = new FileReader();
     reader.onload = function (e) {
@@ -1196,7 +1308,7 @@
         '<div class="field"><label>Zoom</label><input type="range" id="crop-zoom" min="100" max="300" value="100" /></div>' +
         '<p class="avatar-crop-hint">Arraste a foto para centralizar dentro do círculo.</p>';
       var footer = '<div class="modal-actions"><button class="btn btn-ghost" id="crop-cancel">Cancelar</button><button class="btn btn-accent" id="crop-save">Salvar foto</button></div>';
-      var modal = openModal("Ajustar foto de perfil", body, footer);
+      var modal = openModal(title, body, footer);
 
       var circle = modal.querySelector("#crop-circle");
       var imgEl = modal.querySelector("#crop-img");
@@ -1270,11 +1382,9 @@
         var srcY = (0 - top) / scale;
         var srcSize = C / scale;
         ctx.drawImage(imgEl, srcX, srcY, srcSize, srcSize, 0, 0, outSize, outSize);
-        state.settings.avatarPhoto = canvas.toDataURL("image/jpeg", 0.9);
-        persist(); renderAvatar();
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.9);
         cleanup(); closeModal();
-        if (ui.view === "settings") renderView();
-        showToast("Foto de perfil atualizada.");
+        onSave(dataUrl);
       });
     };
     reader.readAsDataURL(file);
@@ -2239,11 +2349,14 @@
 
     var notifCard = el('<div class="card settings-row"></div>');
     notifCard.innerHTML = '<div><div class="sl">Notificações push</div><div class="sd">Alerta 10 min antes de cada compromisso, direto na tela do celular — mesmo com o app fechado.</div></div>';
+    var notifActions = el('<div style="display:flex;gap:8px;flex-shrink:0;"></div>');
     var notifBtn = el('<button class="btn btn-ghost btn-sm"></button>');
+    var testNotifBtn = el('<button class="btn btn-ghost btn-sm">Testar agora</button>');
     function updateNotifBtn() {
       var perm = ("Notification" in window) ? Notification.permission : "unsupported";
       notifBtn.textContent = perm === "granted" ? "Ativado" : perm === "denied" ? "Bloqueado" : "Ativar";
       notifBtn.disabled = perm === "denied";
+      testNotifBtn.style.display = perm === "granted" ? "" : "none";
     }
     updateNotifBtn();
     notifBtn.addEventListener("click", function () {
@@ -2258,25 +2371,127 @@
         });
       });
     });
-    notifCard.appendChild(notifBtn);
+    testNotifBtn.addEventListener("click", function () {
+      testNotifBtn.disabled = true;
+      var originalText = testNotifBtn.textContent;
+      testNotifBtn.textContent = "Enviando...";
+      sb.functions.invoke("send-test-notification", { body: {} }).then(function (res) {
+        if (res.error) {
+          var detail = res.error.message || (res.error.context && res.error.context.status) || String(res.error);
+          showToast("Erro ao mandar o teste (" + detail + "). Confira se a função 'send-test-notification' existe e está publicada no Supabase.");
+          return;
+        }
+        var data = res.data || {};
+        if (data.ok) showToast("Notificação de teste enviada! Feche ou trave o celular e aguarde alguns segundos.");
+        else showToast(data.error || "Não foi possível enviar a notificação de teste.");
+      }).catch(function (err) {
+        showToast("Erro ao mandar o teste: " + (err && err.message ? err.message : String(err)));
+      }).then(function () {
+        testNotifBtn.disabled = false;
+        testNotifBtn.textContent = originalText;
+      });
+    });
+    notifActions.appendChild(notifBtn);
+    notifActions.appendChild(testNotifBtn);
+    notifCard.appendChild(notifActions);
     grid.appendChild(notifCard);
 
-    var voiceCard = el('<div class="card settings-row"></div>');
-    voiceCard.innerHTML = '<div><div class="sl">Aviso por voz</div><div class="sd">Fala o compromisso em voz alta quando o lembrete aparece na tela.</div></div>';
-    var voiceBtn = el('<button class="btn btn-ghost btn-sm"></button>');
-    function updateVoiceBtn() {
-      var supported = "speechSynthesis" in window;
-      voiceBtn.textContent = !supported ? "Indisponível" : state.settings.voiceEnabled ? "Ativado" : "Desativado";
-      voiceBtn.disabled = !supported;
+    var aiVoiceCard = el('<div class="card settings-row ai-persona-card" style="flex-direction:column;align-items:stretch;gap:14px;"></div>');
+    var aiVoiceHead = el(
+      '<div style="display:flex;align-items:center;gap:14px;">' +
+        '<div class="ai-voice-avatar-preview" id="ai-voice-avatar-preview"></div>' +
+        '<div><div class="sl">Assistente de IA</div><div class="sd">Personalize o nome, o avatar, a voz e a personalidade da assistente.</div></div>' +
+      '</div>'
+    );
+    aiVoiceHead.querySelector("#ai-voice-avatar-preview").innerHTML = state.settings.aiAvatarPhoto
+      ? '<img src="' + state.settings.aiAvatarPhoto + '" alt="Avatar da assistente" />'
+      : ic(state.settings.aiVoiceGender === "masculina" ? "assistantMale" : "assistantFemale", 22);
+    aiVoiceCard.appendChild(aiVoiceHead);
+
+    var nameRow = el('<div><label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:6px;">Nome da assistente</label></div>');
+    var nameInputRow = el('<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>');
+    var aiNameInput = el('<input value="' + escapeHtml(state.settings.aiName || "Sofia") + '" placeholder="Ex.: Sofia" style="width:140px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;" />');
+    function saveAiName(newName) {
+      newName = (newName || "").trim();
+      if (!newName || newName === state.settings.aiName) return;
+      state.settings.aiName = newName;
+      persist(); renderAIFabIcon();
     }
-    updateVoiceBtn();
-    voiceBtn.addEventListener("click", function () {
-      state.settings.voiceEnabled = !state.settings.voiceEnabled;
-      persist(); updateVoiceBtn();
-      if (state.settings.voiceEnabled) speakReminder("Aviso por voz ativado.");
+    aiNameInput.addEventListener("change", function () { saveAiName(aiNameInput.value); });
+    nameInputRow.appendChild(aiNameInput);
+    // Nomes rápidos já têm um gênero de voz associado — escolher um deles
+    // troca a voz automaticamente pro gênero certo, e a assistente já fala
+    // na hora com a voz nova, pra você decidir se gosta ou quer outra.
+    var NAME_GENDER_MAP = { Sofia: "feminina", Luna: "feminina", Maya: "feminina", Lucas: "masculina", Theo: "masculina", Alex: "masculina" };
+    Object.keys(NAME_GENDER_MAP).forEach(function (n) {
+      var chip = el('<button type="button" class="btn btn-sm ' + (state.settings.aiName === n ? "btn-accent" : "btn-ghost") + '">' + n + '</button>');
+      chip.addEventListener("click", function () {
+        unlockAudioForSpeech();
+        aiNameInput.value = n;
+        state.settings.aiName = n;
+        state.settings.aiVoiceGender = NAME_GENDER_MAP[n];
+        persist(); renderAIFabIcon();
+        var userNm = state.settings.name;
+        var isFem = NAME_GENDER_MAP[n] === "feminina";
+        speakServerText("Oi" + (userNm ? ", " + userNm : "") + "! Agora sou " + (isFem ? "a " : "o ") + n + ". O que achou?");
+        renderView();
+      });
+      nameInputRow.appendChild(chip);
     });
-    voiceCard.appendChild(voiceBtn);
-    grid.appendChild(voiceCard);
+    nameRow.appendChild(nameInputRow);
+    aiVoiceCard.appendChild(nameRow);
+
+    var aiVoiceActions = el('<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>');
+    var photoLabel = el('<span style="font-size:0.78rem;color:var(--text-muted);">Foto:</span>');
+    aiVoiceActions.appendChild(photoLabel);
+    var changeAiPhotoBtn = el('<button type="button" class="btn btn-ghost btn-sm">Alterar foto</button>');
+    changeAiPhotoBtn.addEventListener("click", function () { document.getElementById("ai-avatar-file-input").click(); });
+    aiVoiceActions.appendChild(changeAiPhotoBtn);
+    if (state.settings.aiAvatarPhoto) {
+      var removeAiPhotoBtn = el('<button type="button" class="btn btn-danger btn-sm">Remover</button>');
+      removeAiPhotoBtn.addEventListener("click", removeAssistantAvatarPhoto);
+      aiVoiceActions.appendChild(removeAiPhotoBtn);
+    }
+    aiVoiceCard.appendChild(aiVoiceActions);
+
+    var aiVoiceRow2 = el('<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>');
+    var voiceLabel = el('<span style="font-size:0.78rem;color:var(--text-muted);">Voz:</span>');
+    aiVoiceRow2.appendChild(voiceLabel);
+    var voiceOpts = [{ id: "feminina", label: "Feminina" }, { id: "masculina", label: "Masculina" }];
+    voiceOpts.forEach(function (o) {
+      var b = el('<button type="button" class="btn btn-sm ' + (state.settings.aiVoiceGender === o.id ? "btn-accent" : "btn-ghost") + '">' + o.label + '</button>');
+      b.addEventListener("click", function () {
+        if (state.settings.aiVoiceGender === o.id) return;
+        unlockAudioForSpeech();
+        state.settings.aiVoiceGender = o.id;
+        persist(); renderAIFabIcon();
+        // Fala com a voz de verdade (OpenAI) recém-escolhida, pra confirmar a
+        // troca com naturalidade — o desbloqueio acima garante que funciona
+        // mesmo no iPhone/Safari, mesmo essa fala vindo depois de uma
+        // resposta de rede.
+        var name = state.settings.name;
+        speakServerText("Oi" + (name ? ", " + name : "") + "! Essa é a minha voz agora, o que achou?");
+        renderView();
+      });
+      aiVoiceRow2.appendChild(b);
+    });
+    aiVoiceCard.appendChild(aiVoiceRow2);
+
+    var aiVoiceRow3 = el('<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>');
+    var speedLabel = el('<span style="font-size:0.78rem;color:var(--text-muted);">Velocidade da fala:</span>');
+    aiVoiceRow3.appendChild(speedLabel);
+    var speedOpts = [{ id: "lenta", label: "Lenta" }, { id: "normal", label: "Normal" }, { id: "rapida", label: "Rápida" }];
+    speedOpts.forEach(function (o) {
+      var b = el('<button type="button" class="btn btn-sm ' + ((state.settings.aiSpeechRate || "normal") === o.id ? "btn-accent" : "btn-ghost") + '">' + o.label + '</button>');
+      b.addEventListener("click", function () {
+        if (state.settings.aiSpeechRate === o.id) return;
+        state.settings.aiSpeechRate = o.id;
+        persist(); renderView();
+      });
+      aiVoiceRow3.appendChild(b);
+    });
+    aiVoiceCard.appendChild(aiVoiceRow3);
+    grid.appendChild(aiVoiceCard);
 
     var exportCard = el('<div class="card settings-row"></div>');
     exportCard.innerHTML = '<div><div class="sl">Exportar dados</div><div class="sd">Baixe um backup de tudo em JSON.</div></div>';
@@ -2332,9 +2547,7 @@
         '<p style="margin:8px 0 0;">Ainda não incluído nesta versão (exigem infraestrutura própria de servidor):</p>' +
         '<ul>' +
           '<li>Sincronização com Google Calendar, Apple Calendar, Outlook, Zoom, Slack, etc.</li>' +
-          '<li>Assistente de IA para reorganização automática da agenda</li>' +
           '<li>Login biométrico e criptografia ponta-a-ponta</li>' +
-          '<li>Notificações push quando o app está fechado</li>' +
         '</ul>' +
       '</div>'
     );
@@ -2373,9 +2586,8 @@
 
   /* ============ REMINDERS ============ */
   // A notificação real (que funciona com o app fechado) é enviada pelo
-  // servidor via Web Push. Isto aqui mostra um aviso na tela, no estilo de
-  // uma notificação de app (ícone + título + hora) e também anuncia por
-  // voz, para quando o app já está aberto.
+  // servidor via Web Push. Isto aqui só mostra um aviso na tela quando o
+  // app já está aberto, sem duplicar a notificação do sistema.
   function checkReminders() {
     var now = new Date();
     var today = todayISO();
@@ -2387,11 +2599,24 @@
       if (diffMin > 0 && diffMin <= 10 && state.settings.notifiedIds.indexOf(notifyKey) === -1) {
         state.settings.notifiedIds.push(notifyKey);
         persist();
-        var sub = a.time + (a.location ? " · " + a.location : "");
-        showReminderBanner(a.title, sub);
-        speakReminder("Lembrete: " + a.title + (a.location ? ", em " + a.location : "") + ", às " + a.time + ".");
+        var msg = a.title + " às " + a.time + (a.location ? " · " + a.location : "");
+        showReminderBanner(a.title, msg);
+        speakReminderAloud(a.title, a.time, a.location);
       }
     });
+  }
+
+  // Com o app aberto (celular desbloqueado), avisa o compromisso falando em
+  // voz alta, além do aviso visual. Um celular travado não permite nenhum
+  // app (nem nativo, nem web) tocar áudio customizado vindo de uma
+  // notificação — isso é uma trava do próprio sistema operacional, não do
+  // ÓRBITA — por isso a fala acontece aqui (app em primeiro plano) e também
+  // assim que o usuário toca na notificação (ver "speak-reminder" abaixo).
+  function speakReminderAloud(title, time, location) {
+    var name = state.settings.name;
+    var msg = (name ? name + ", " : "") + 'seu compromisso "' + title + '" é daqui a pouco, às ' + time + (location ? ", em " + location : "") + ".";
+    unlockAudioForSpeech();
+    speakServerText(msg);
   }
   var reminderTimer = null;
   function showReminderBanner(title, sub) {
@@ -2412,12 +2637,480 @@
     setTimeout(function () { if (b.parentNode) b.remove(); }, 12000);
   }
 
-  function speakReminder(text) {
-    if (!state.settings.voiceEnabled || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    var utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "pt-BR";
-    window.speechSynthesis.speak(utter);
+  /* ============ AI ASSISTANT ============ */
+  var AI_FUNCTION_NAME = "ai-assistant";
+  var aiChat = { messages: [], busy: false };
+
+  function buildAIContext() {
+    var apptCtx = state.appointments.map(function (a) {
+      return {
+        id: a.id, title: a.title, date: a.date, time: a.time,
+        location: a.location || "", priority: a.priority,
+        repeat: a.repeat || "none", repeatUntil: a.repeatUntil || ""
+      };
+    });
+    var taskCtx = state.tasks.filter(function (t) { return !t.done; }).map(function (t) {
+      return { id: t.id, title: t.title, dueDate: t.dueDate || "", priority: t.priority };
+    });
+    return {
+      today: todayISO(),
+      nowTime: new Date().toTimeString().slice(0, 5),
+      timezone: state.settings.timezone || "America/Sao_Paulo",
+      userName: state.settings.name || "",
+      aiName: state.settings.aiName || "Sofia",
+      aiGenderLabel: state.settings.aiVoiceGender === "masculina" ? "masculino" : "feminino",
+      appointments: apptCtx,
+      tasks: taskCtx
+    };
+  }
+
+  function ttsVoiceForGender() {
+    return state.settings.aiVoiceGender === "masculina" ? "onyx" : "nova";
+  }
+
+  function ttsSpeedValue() {
+    var r = state.settings.aiSpeechRate;
+    if (r === "lenta") return 0.85;
+    if (r === "rapida") return 1.15;
+    return 1.0;
+  }
+
+  function renderAIFabIcon() {
+    var fab = document.getElementById("ai-fab");
+    if (!fab) return;
+    var photo = state.settings.aiAvatarPhoto;
+    var aiName = state.settings.aiName || "Sofia";
+    fab.innerHTML = photo
+      ? '<img src="' + photo + '" alt="Assistente" />'
+      : ic(state.settings.aiVoiceGender === "masculina" ? "assistantMale" : "assistantFemale", 24);
+    fab.title = aiName;
+    fab.setAttribute("aria-label", aiName);
+    var panelName = document.getElementById("ai-panel-name");
+    if (panelName) panelName.textContent = aiName;
+  }
+
+  function pickGreeting() {
+    var name = state.settings.name;
+    var aiName = state.settings.aiName || "Sofia";
+    var isFem = state.settings.aiVoiceGender !== "masculina";
+    var intro = "Sou " + (isFem ? "a " : "o ") + aiName + ".";
+    var withName = function (s) { return name ? s.replace("{n}", name) : s.replace(", {n}", "").replace("{n}", "").trim(); };
+    var templates = [
+      withName("E aí, {n}! Tudo certo por aí? " + intro + " Bora organizar seu dia?"),
+      withName("Fala, {n}! " + intro + " Como posso te ajudar agora?"),
+      withName("Iaí! Como você está, {n}?") + " " + intro,
+      withName("Bom te ver de novo, {n}.") + " Em que posso ajudar?",
+      withName("Opa! Vamos resolver isso, {n}?"),
+      withName("Que bom que você apareceu, {n}. ") + intro,
+      "E aí, chefe! " + intro + " Em que posso te ajudar?",
+      withName("Como posso facilitar seu dia hoje, {n}?")
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+
+  function removeAssistantAvatarPhoto() {
+    state.settings.aiAvatarPhoto = null;
+    persist(); renderAIFabIcon();
+    if (ui.view === "settings") renderView();
+    showToast("Foto da assistente removida.");
+  }
+
+  function aiMessagesEl() { return document.getElementById("ai-messages"); }
+
+  function toggleAIPanel(show) {
+    var panel = document.getElementById("ai-panel");
+    var willShow = typeof show === "boolean" ? show : panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !willShow);
+    if (willShow) {
+      if (!aiChat.messages.length) {
+        unlockAudioForSpeech();
+        var greeting = pickGreeting();
+        addAIMessage("assistant", greeting, null);
+        speakServerText(greeting);
+      }
+      var input = document.getElementById("ai-input");
+      setTimeout(function () { input.focus(); }, 50);
+    }
+  }
+
+  // A assistente age como uma secretária de verdade: aplica os pedidos na
+  // hora, sem esperar confirmação. Cada ação aparece no chat já com o
+  // resultado, pra nada passar despercebido — mas nada fica pendente.
+  function addAIMessage(role, text, actions) {
+    if (actions && actions.length) {
+      actions.forEach(function (action) {
+        var res = applyAIAction(action);
+        action.status = res.ok ? "done" : "error";
+        action.resultMsg = res.msg;
+      });
+    }
+    aiChat.messages.push({ role: role, text: text, actions: actions || null });
+    renderAIMessages();
+  }
+
+  function fmtDateBR(iso) {
+    if (!iso) return "";
+    var parts = iso.split("-");
+    return parts.length === 3 ? parts[2] + "/" + parts[1] + "/" + parts[0] : iso;
+  }
+
+  function describeAction(action) {
+    var p = action.arguments || {};
+    switch (action.name) {
+      case "create_appointment":
+        return 'Compromisso "' + (p.title || "") + '" em ' + fmtDateBR(p.date) + ' às ' + (p.time || "") + (p.repeat && p.repeat !== "none" ? " (repetição: " + repeatLabel(p.repeat).toLowerCase() + ")" : "") + '.';
+      case "update_appointment":
+        return 'Atualização do compromisso' + (p.title ? ' "' + p.title + '"' : "") + (p.date ? ' em ' + fmtDateBR(p.date) : '') + (p.time ? ' às ' + p.time : '') + '.';
+      case "delete_appointment":
+        return 'Exclusão do compromisso "' + (p.title || "selecionado") + '".';
+      case "create_task":
+        return 'Tarefa "' + (p.title || "") + '"' + (p.dueDate ? ' com prazo em ' + fmtDateBR(p.dueDate) : '') + '.';
+      case "delete_task":
+        return 'Exclusão da tarefa "' + (p.title || "selecionada") + '".';
+      default:
+        return "Ação: " + action.name + ".";
+    }
+  }
+
+  function applyAIAction(action) {
+    var p = action.arguments || {};
+    switch (action.name) {
+      case "create_appointment": {
+        if (!p.title || !p.date || !p.time) return { ok: false, msg: "Faltam dados obrigatórios (título, data ou hora)." };
+        state.appointments.push({
+          id: genId(), title: p.title, date: p.date, time: p.time,
+          location: p.location || "", link: "", notes: p.notes || "",
+          color: "laranja", priority: p.priority || "media",
+          repeat: p.repeat || "none", repeatUntil: p.repeatUntil || ""
+        });
+        persist(); renderView();
+        return { ok: true, msg: "Compromisso criado." };
+      }
+      case "update_appointment": {
+        var idx = state.appointments.findIndex(function (x) { return x.id === p.id; });
+        if (idx === -1) return { ok: false, msg: "Não encontrei esse compromisso." };
+        var patch = {};
+        ["title", "date", "time", "location", "notes", "priority", "repeat", "repeatUntil"].forEach(function (k) {
+          if (p[k] !== undefined && p[k] !== null) patch[k] = p[k];
+        });
+        state.appointments[idx] = Object.assign({}, state.appointments[idx], patch);
+        persist(); renderView();
+        return { ok: true, msg: "Compromisso atualizado." };
+      }
+      case "delete_appointment": {
+        var before = state.appointments.length;
+        state.appointments = state.appointments.filter(function (x) { return x.id !== p.id; });
+        if (state.appointments.length === before) return { ok: false, msg: "Não encontrei esse compromisso." };
+        persist(); renderView();
+        return { ok: true, msg: "Compromisso excluído." };
+      }
+      case "create_task": {
+        if (!p.title) return { ok: false, msg: "Falta o título da tarefa." };
+        state.tasks.push({
+          id: genId(), title: p.title, dueDate: p.dueDate || "", priority: p.priority || "media",
+          category: p.category || "", notes: "", subtasks: [], done: false
+        });
+        persist(); renderView();
+        return { ok: true, msg: "Tarefa criada." };
+      }
+      case "delete_task": {
+        var beforeT = state.tasks.length;
+        state.tasks = state.tasks.filter(function (x) { return x.id !== p.id; });
+        if (state.tasks.length === beforeT) return { ok: false, msg: "Não encontrei essa tarefa." };
+        persist(); renderView();
+        return { ok: true, msg: "Tarefa excluída." };
+      }
+      default:
+        return { ok: false, msg: "Ação desconhecida." };
+    }
+  }
+
+  function renderAIMessages() {
+    var root = aiMessagesEl();
+    root.innerHTML = "";
+    aiChat.messages.forEach(function (m) {
+      if (m.text) {
+        root.appendChild(el('<div class="ai-msg ' + m.role + '">' + escapeHtml(m.text) + '</div>'));
+      }
+      if (m.actions && m.actions.length) {
+        m.actions.forEach(function (action) {
+          var card = el(
+            '<div class="ai-action-card ' + (action.status === "error" ? "aa-error" : "") + '">' +
+              '<div class="aa-desc">' + escapeHtml(describeAction(action)) + '</div>' +
+              '<div class="aa-status">' + (action.status === "done" ? "✓ " + escapeHtml(action.resultMsg || "Feito.") : escapeHtml(action.resultMsg || "Não foi possível.")) + '</div>' +
+            '</div>'
+          );
+          root.appendChild(card);
+        });
+      }
+    });
+    root.scrollTop = root.scrollHeight;
+  }
+
+  function sendAIMessage(text) {
+    if (aiChat.busy || !text.trim()) return;
+    addAIMessage("user", text, null);
+    aiChat.busy = true;
+    document.getElementById("ai-send").disabled = true;
+    var typing = el('<div class="ai-typing" id="ai-typing-indicator">Assistente está digitando…</div>');
+    aiMessagesEl().appendChild(typing);
+    aiMessagesEl().scrollTop = aiMessagesEl().scrollHeight;
+
+    var history = aiChat.messages
+      .filter(function (m) { return m.text && (m.role === "user" || m.role === "assistant"); })
+      .slice(-10)
+      .map(function (m) { return { role: m.role, content: m.text }; });
+
+    sb.functions.invoke(AI_FUNCTION_NAME, {
+      body: { message: text, history: history, context: buildAIContext(), voice: ttsVoiceForGender(), speed: ttsSpeedValue() }
+    }).then(function (res) {
+      var t = document.getElementById("ai-typing-indicator");
+      if (t) t.remove();
+      if (res.error) {
+        addAIMessage("error", "Não consegui falar com o assistente agora. Tente de novo em instantes.", null);
+        return;
+      }
+      var data = res.data || {};
+      if (data.error) {
+        addAIMessage("error", data.error, null);
+        return;
+      }
+      addAIMessage("assistant", data.answer || "", data.actions || null);
+      speakAIReply(fallbackSpokenText(data.answer, (data.actions || []).length), data.audioBase64, data.audioMime);
+    }).catch(function () {
+      var t = document.getElementById("ai-typing-indicator");
+      if (t) t.remove();
+      addAIMessage("error", "Não consegui falar com o assistente agora. Tente de novo em instantes.", null);
+    }).then(function () {
+      aiChat.busy = false;
+      document.getElementById("ai-send").disabled = false;
+    });
+  }
+
+  /* ============ AI VOICE (fala com a IA e responde falando) ============ */
+  var VOICE_FUNCTION_NAME = "voice-assistant";
+  var VOICE_MAX_MS = 60000;
+  var VOICE_MIN_HOLD_MS = 300;
+  var micState = { recorder: null, chunks: [], stream: null, timer: null, phase: "idle", releaseRequested: false, pressStart: 0 };
+  var ptAudioEl = null;
+  var audioUnlocked = false;
+
+  // iOS/Safari só permite tocar áudio (ou usar o sintetizador de voz) se a
+  // primeira chamada acontecer de forma síncrona dentro de um toque direto
+  // do usuário — chamar isso depois de uma resposta de rede assíncrona é
+  // silenciosamente bloqueado. Por isso "destravamos" o áudio aqui, de forma
+  // síncrona, assim que o usuário toca em enviar/gravar, antes de qualquer
+  // requisição de rede.
+  function unlockAudioForSpeech() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    try {
+      if (!ptAudioEl) {
+        ptAudioEl = new Audio();
+        ptAudioEl.setAttribute("playsinline", "");
+        document.body.appendChild(ptAudioEl);
+        ptAudioEl.style.display = "none";
+      }
+      ptAudioEl.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+      var p = ptAudioEl.play();
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
+    try {
+      if ("speechSynthesis" in window) {
+        var warm = new SpeechSynthesisUtterance(" ");
+        warm.volume = 0;
+        window.speechSynthesis.speak(warm);
+      }
+    } catch (e) {}
+  }
+
+  function fallbackSpokenText(text, actionsCount) {
+    var t = (text || "").trim();
+    if (t) return t;
+    var name = state.settings.name;
+    if (actionsCount) return "Pronto" + (name ? ", " + name : "") + ", já cuidei disso pra você.";
+    return "Certo" + (name ? ", " + name : "") + ".";
+  }
+
+  function supportsVoiceInput() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  }
+
+  function pickRecorderMime() {
+    var candidates = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+    for (var i = 0; i < candidates.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+    }
+    return "";
+  }
+
+  function setMicUI(active) {
+    var btn = document.getElementById("ai-mic-btn");
+    btn.classList.toggle("recording", active);
+    document.getElementById("ai-voice-hint").classList.toggle("hidden", !active);
+  }
+
+  function startVoiceRecording() {
+    if (!supportsVoiceInput() || aiChat.busy || micState.phase !== "idle") return;
+    micState.phase = "starting";
+    micState.releaseRequested = false;
+    micState.pressStart = Date.now();
+    setMicUI(true);
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      if (micState.releaseRequested) {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        micState.phase = "idle";
+        setMicUI(false);
+        return;
+      }
+      micState.stream = stream;
+      micState.chunks = [];
+      var mime = pickRecorderMime();
+      var rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      micState.recorder = rec;
+      rec.addEventListener("dataavailable", function (e) { if (e.data && e.data.size) micState.chunks.push(e.data); });
+      rec.addEventListener("stop", function () {
+        micState.stream.getTracks().forEach(function (t) { t.stop(); });
+        clearTimeout(micState.timer);
+        var heldMs = Date.now() - micState.pressStart;
+        var blob = new Blob(micState.chunks, { type: rec.mimeType || mime || "audio/webm" });
+        micState.phase = "idle";
+        if (heldMs >= VOICE_MIN_HOLD_MS && blob.size > 0) handleVoiceBlob(blob);
+      });
+      rec.start();
+      micState.phase = "recording";
+      micState.timer = setTimeout(function () { if (micState.phase === "recording") stopVoiceRecording(); }, VOICE_MAX_MS);
+    }).catch(function () {
+      micState.phase = "idle";
+      setMicUI(false);
+      showToast("Não consegui acessar o microfone. Verifique a permissão do navegador.");
+    });
+  }
+
+  function stopVoiceRecording() {
+    if (micState.phase === "starting") {
+      micState.releaseRequested = true;
+      setMicUI(false);
+    } else if (micState.phase === "recording") {
+      setMicUI(false);
+      micState.recorder.stop();
+    }
+  }
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onloadend = function () {
+        var result = reader.result;
+        var comma = String(result).indexOf(",");
+        resolve(comma !== -1 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  var MALE_VOICE_NAME_HINTS = ["male", "masculin", "homem", "daniel", "felipe", "ricardo", "diego", "carlos", "thiago", "george", "fred"];
+  var FEMALE_VOICE_NAME_HINTS = ["female", "feminin", "mulher", "luciana", "maria", "camila", "vitória", "vitoria", "joana", "samantha", "victoria"];
+
+  function pickBrowserVoice() {
+    if (!("speechSynthesis" in window)) return null;
+    var voices = window.speechSynthesis.getVoices() || [];
+    var ptVoices = voices.filter(function (v) { return (v.lang || "").toLowerCase().indexOf("pt") === 0; });
+    if (!ptVoices.length) return null;
+    var wantMale = state.settings.aiVoiceGender === "masculina";
+    var hints = wantMale ? MALE_VOICE_NAME_HINTS : FEMALE_VOICE_NAME_HINTS;
+    var match = ptVoices.filter(function (v) {
+      var n = (v.name || "").toLowerCase();
+      return hints.some(function (h) { return n.indexOf(h) !== -1; });
+    })[0];
+    return match || ptVoices[0];
+  }
+
+  function speakWithBrowserVoice(text) {
+    if (!text || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = "pt-BR";
+      var voice = pickBrowserVoice();
+      if (voice) u.voice = voice;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  // Sempre fala a resposta da IA em voz alta: usa o áudio gerado pela OpenAI
+  // (voz natural) quando disponível, e cai pro sintetizador do navegador se
+  // a geração de áudio falhar por qualquer motivo — a resposta falada nunca
+  // deve simplesmente não acontecer.
+  function speakAIReply(text, audioBase64, audioMime) {
+    if (audioBase64) {
+      try {
+        if (!ptAudioEl) { ptAudioEl = new Audio(); document.body.appendChild(ptAudioEl); ptAudioEl.style.display = "none"; }
+        ptAudioEl.src = "data:" + (audioMime || "audio/mpeg") + ";base64," + audioBase64;
+        var playPromise = ptAudioEl.play();
+        if (playPromise && playPromise.catch) {
+          playPromise.catch(function () { speakWithBrowserVoice(text); });
+        }
+        return;
+      } catch (e) { /* cai pro fallback abaixo */ }
+    }
+    speakWithBrowserVoice(text);
+  }
+
+  // Fala uma frase pronta (saudação, confirmação de troca de voz) com a voz
+  // de verdade da OpenAI, no gênero/velocidade escolhidos — em vez da voz
+  // robótica do navegador. Só usa o navegador como último recurso, se a
+  // chamada ao servidor falhar por qualquer motivo.
+  function speakServerText(text) {
+    if (!text || !currentUser) { speakWithBrowserVoice(text); return; }
+    sb.functions.invoke(AI_FUNCTION_NAME, {
+      body: { ttsOnly: text, voice: ttsVoiceForGender(), speed: ttsSpeedValue() }
+    }).then(function (res) {
+      if (res.error) { speakWithBrowserVoice(text); return; }
+      var data = res.data || {};
+      speakAIReply(text, data.audioBase64, data.audioMime);
+    }).catch(function () {
+      speakWithBrowserVoice(text);
+    });
+  }
+
+  function handleVoiceBlob(blob) {
+    if (!blob || !blob.size || aiChat.busy) return;
+    aiChat.busy = true;
+    document.getElementById("ai-send").disabled = true;
+    document.getElementById("ai-mic-btn").disabled = true;
+    var typing = el('<div class="ai-typing" id="ai-typing-indicator">Ouvindo o áudio…</div>');
+    aiMessagesEl().appendChild(typing);
+    aiMessagesEl().scrollTop = aiMessagesEl().scrollHeight;
+
+    var history = aiChat.messages
+      .filter(function (m) { return m.text && (m.role === "user" || m.role === "assistant"); })
+      .slice(-10)
+      .map(function (m) { return { role: m.role, content: m.text }; });
+
+    blobToBase64(blob).then(function (base64) {
+      return sb.functions.invoke(VOICE_FUNCTION_NAME, {
+        body: { audioBase64: base64, mimeType: blob.type || "audio/webm", history: history, context: buildAIContext(), voice: ttsVoiceForGender(), speed: ttsSpeedValue() }
+      });
+    }).then(function (res) {
+      var t = document.getElementById("ai-typing-indicator");
+      if (t) t.remove();
+      if (res.error) { addAIMessage("error", "Não consegui processar o áudio. Tente de novo.", null); return; }
+      var data = res.data || {};
+      if (data.error) { addAIMessage("error", data.error, null); return; }
+      if (data.transcript) addAIMessage("user", data.transcript, null);
+      addAIMessage("assistant", data.answer || "", data.actions || null);
+      speakAIReply(fallbackSpokenText(data.answer, (data.actions || []).length), data.audioBase64, data.audioMime);
+    }).catch(function () {
+      var t = document.getElementById("ai-typing-indicator");
+      if (t) t.remove();
+      addAIMessage("error", "Não consegui processar o áudio. Tente de novo.", null);
+    }).then(function () {
+      aiChat.busy = false;
+      document.getElementById("ai-send").disabled = false;
+      document.getElementById("ai-mic-btn").disabled = false;
+    });
   }
 
   /* ============ EVENTS ============ */
@@ -2445,6 +3138,36 @@
     if (e.target.id === "mobile-drawer-backdrop") closeDrawer();
   });
 
+  renderAIFabIcon();
+  document.getElementById("ai-fab").addEventListener("click", function () { toggleAIPanel(); });
+  document.getElementById("ai-panel-close").innerHTML = ic("x", 14);
+  document.getElementById("ai-panel-close").addEventListener("click", function () { toggleAIPanel(false); });
+  document.getElementById("ai-send").innerHTML = ic("send", 16);
+  document.getElementById("ai-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    unlockAudioForSpeech();
+    var input = document.getElementById("ai-input");
+    var text = input.value;
+    input.value = "";
+    sendAIMessage(text);
+  });
+
+  var aiMicBtn = document.getElementById("ai-mic-btn");
+  if (supportsVoiceInput()) {
+    aiMicBtn.innerHTML = ic("mic", 15);
+    aiMicBtn.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      unlockAudioForSpeech();
+      try { aiMicBtn.setPointerCapture(e.pointerId); } catch (err) {}
+      startVoiceRecording();
+    });
+    aiMicBtn.addEventListener("pointerup", function () { stopVoiceRecording(); });
+    aiMicBtn.addEventListener("pointercancel", function () { stopVoiceRecording(); });
+    aiMicBtn.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  } else {
+    aiMicBtn.style.display = "none";
+  }
+
   var avatarFileInput = document.getElementById("avatar-file-input");
   document.getElementById("avatar").addEventListener("click", function () { avatarFileInput.click(); });
   avatarFileInput.addEventListener("change", function () {
@@ -2452,9 +3175,26 @@
     avatarFileInput.value = "";
   });
 
+  var aiAvatarFileInput = document.getElementById("ai-avatar-file-input");
+  aiAvatarFileInput.addEventListener("change", function () {
+    if (aiAvatarFileInput.files[0]) {
+      openAvatarCropModal(aiAvatarFileInput.files[0], {
+        title: "Ajustar foto da assistente",
+        onSave: function (dataUrl) {
+          state.settings.aiAvatarPhoto = dataUrl;
+          persist(); renderAIFabIcon();
+          if (ui.view === "settings") renderView();
+          showToast("Foto da assistente atualizada.");
+        }
+      });
+    }
+    aiAvatarFileInput.value = "";
+  });
+
   /* ============ INIT ============ */
   function init() {
     renderAvatar();
+    renderAIFabIcon();
     applyTheme();
     applyCustomColors();
     initThemeSwitchIcons();
@@ -2547,7 +3287,7 @@
       showBootLoading(false);
       showAuthScreen(false);
       if (!appStarted) { appStarted = true; init(); }
-      else { renderAvatar(); applyTheme(); applyCustomColors(); initThemeSwitchIcons(); renderNav(); renderView(); }
+      else { renderAvatar(); renderAIFabIcon(); applyTheme(); applyCustomColors(); initThemeSwitchIcons(); renderNav(); renderView(); }
     });
   }
 
@@ -2582,6 +3322,32 @@
       if (reloadedForUpdate) return;
       reloadedForUpdate = true;
       window.location.reload();
+    });
+
+    // Assim que o usuário toca na notificação de um compromisso, o service
+    // worker manda os dados dele pra cá — falamos na hora, no instante em
+    // que o app abre/ganha foco (o mais perto que dá de "avisar por voz"
+    // continuando respeitando a trava do sistema pra celular travado).
+    var pendingSpeakReminder = null;
+    var speakRetries = 0;
+    function trySpeakPendingReminder() {
+      if (!pendingSpeakReminder) return;
+      if (!currentUser) {
+        speakRetries++;
+        if (speakRetries < 20) setTimeout(trySpeakPendingReminder, 500);
+        return;
+      }
+      var r = pendingSpeakReminder;
+      pendingSpeakReminder = null;
+      speakReminderAloud(r.apptTitle, r.apptTime, r.apptLocation);
+    }
+    navigator.serviceWorker.addEventListener("message", function (event) {
+      var msg = event.data || {};
+      if (msg.type === "speak-reminder" && msg.apptTitle) {
+        pendingSpeakReminder = msg;
+        speakRetries = 0;
+        trySpeakPendingReminder();
+      }
     });
   }
 })();
