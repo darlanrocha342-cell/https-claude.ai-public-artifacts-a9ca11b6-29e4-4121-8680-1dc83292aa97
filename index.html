@@ -2618,6 +2618,36 @@
     unlockAudioForSpeech();
     speakServerText(msg);
   }
+  // O navegador só deixa tocar áudio/voz automaticamente quando isso
+  // acontece na mesma "batida" síncrona de um toque do usuário. Abrir o app
+  // pela notificação NÃO conta como esse toque direto (é assíncrono demais
+  // pelo tempo que a página leva pra carregar/autenticar), então falar
+  // sozinho nesse momento é bloqueado silenciosamente em boa parte dos
+  // celulares. Por isso mostramos um botão — o toque nele É um gesto
+  // direto, então funciona sempre, sem exceção.
+  function showSpeakReminderPrompt(r) {
+    var root = document.getElementById("reminder-root");
+    var sub = r.apptTime + (r.apptLocation ? " · " + r.apptLocation : "");
+    var b = el(
+      '<div class="reminder-banner">' +
+        '<img class="rb-icon" src="icons/icon-192.png" alt="" />' +
+        '<div class="rb-body">' +
+          '<div class="rb-app-row"><span class="rb-app-name">ÓRBITA</span><span class="rb-app-time">agora</span></div>' +
+          '<div class="rb-title">' + escapeHtml(r.apptTitle) + '</div>' +
+          '<div class="rb-sub">' + escapeHtml(sub) + '</div>' +
+          '<button type="button" class="btn btn-accent btn-sm" style="margin-top:8px;">🔊 Ouvir lembrete</button>' +
+        '</div>' +
+        '<button class="rb-close">' + ic("x", 13) + '</button>' +
+      '</div>'
+    );
+    b.querySelector(".rb-close").addEventListener("click", function () { b.remove(); });
+    b.querySelector(".btn-accent").addEventListener("click", function () {
+      speakReminderAloud(r.apptTitle, r.apptTime, r.apptLocation);
+      b.remove();
+    });
+    root.appendChild(b);
+  }
+
   var reminderTimer = null;
   function showReminderBanner(title, sub) {
     var root = document.getElementById("reminder-root");
@@ -3342,7 +3372,7 @@
       }
       var r = pendingSpeakReminder;
       pendingSpeakReminder = null;
-      speakReminderAloud(r.apptTitle, r.apptTime, r.apptLocation);
+      showSpeakReminderPrompt(r);
     }
     navigator.serviceWorker.addEventListener("message", function (event) {
       var msg = event.data || {};
