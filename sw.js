@@ -1,4 +1,4 @@
-var CACHE_NAME = "orbita-cache-v4";
+var CACHE_NAME = "orbita-cache-v5";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -64,8 +64,14 @@ self.addEventListener("push", function (event) {
     icon: "icons/icon-192.png",
     badge: "icons/icon-192.png",
     tag: data.tag || "orbita-reminder-" + Date.now(),
-    vibrate: [200, 100, 200],
-    requireInteraction: false,
+    // Vibração mais longa e insistente, tipo despertador. O navegador só
+    // toca esse padrão uma vez ao chegar (não existe API web pra vibração
+    // em loop contínuo) — mas "requireInteraction" compensa isso mantendo a
+    // notificação fixa na tela até o usuário tocar em algo, em vez de sumir
+    // sozinha em poucos segundos.
+    vibrate: [500, 200, 500, 200, 500, 200, 500],
+    requireInteraction: true,
+    actions: [{ action: "dismiss", title: "Desligar" }],
     // Guardamos os dados do compromisso aqui pra poder falar em voz alta
     // assim que o usuário tocar na notificação (ver notificationclick abaixo)
     // — um celular travado não deixa nenhum app tocar áudio customizado
@@ -83,6 +89,11 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
+
+  // Botão "Desligar": só fecha a notificação (já feito acima), sem abrir o
+  // app nem falar nada — é o gesto de "desligar o despertador".
+  if (event.action === "dismiss") return;
+
   var data = event.notification.data || {};
   var url = data.url || "./";
   var speakMsg = data.apptTitle
