@@ -15,7 +15,7 @@
 //   OPENAI_MODEL       (padrão: gpt-4o-mini)
 //   OPENAI_STT_MODEL    (padrão: gpt-4o-mini-transcribe — mais rápido que whisper-1;
 //                        troque pra "whisper-1" se der algum erro de transcrição)
-//   OPENAI_TTS_MODEL    (padrão: tts-1)
+//   OPENAI_TTS_MODEL    (padrão: gpt-4o-mini-tts — voz bem mais natural que o tts-1 antigo)
 //   OPENAI_TTS_VOICE    (padrão: alloy)
 // SUPABASE_URL e SUPABASE_ANON_KEY já são injetadas automaticamente pelo
 // Supabase em toda Edge Function — não precisa configurar.
@@ -55,7 +55,11 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini";
 const OPENAI_STT_MODEL = Deno.env.get("OPENAI_STT_MODEL") || "gpt-4o-mini-transcribe";
-const OPENAI_TTS_MODEL = Deno.env.get("OPENAI_TTS_MODEL") || "tts-1";
+const OPENAI_TTS_MODEL = Deno.env.get("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts";
+
+// gpt-4o-mini-tts (diferente do tts-1 antigo) aceita uma instrução de estilo
+// de fala — é o que deixa a voz mais natural/humana em vez de robótica.
+const TTS_SPEAKING_STYLE = "Fale de um jeito natural, caloroso e humano — como uma pessoa de verdade numa conversa, com entonação viva, pausas naturais e ritmo variado. Nunca robótico, nunca monótono, nunca lendo em voz de máquina.";
 const OPENAI_TTS_VOICE = Deno.env.get("OPENAI_TTS_VOICE") || "alloy";
 
 const CORS_HEADERS = {
@@ -428,19 +432,26 @@ Deno.serve(async (req) => {
 
     let audioOutBase64: string | null = null;
     try {
+      const ttsBody: Record<string, unknown> = {
+        model: OPENAI_TTS_MODEL,
+        voice: requestedVoice,
+        input: finalAnswer.slice(0, 800),
+        response_format: "mp3",
+        speed: requestedSpeed,
+      };
+      // "instructions" só existe nos modelos gpt-4o-*-tts; o tts-1/tts-1-hd
+      // antigos rejeitam parâmetros desconhecidos, então só mandamos quando
+      // o modelo configurado realmente suporta.
+      if (OPENAI_TTS_MODEL.indexOf("gpt-4o") === 0) {
+        ttsBody.instructions = TTS_SPEAKING_STYLE;
+      }
       const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
-        body: JSON.stringify({
-          model: OPENAI_TTS_MODEL,
-          voice: requestedVoice,
-          input: finalAnswer.slice(0, 800),
-          response_format: "mp3",
-          speed: requestedSpeed,
-        }),
+        body: JSON.stringify(ttsBody),
       });
       if (ttsRes.ok) {
         const buf = new Uint8Array(await ttsRes.arrayBuffer());
