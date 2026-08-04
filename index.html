@@ -829,6 +829,13 @@
     animation: rb-in 0.22s ease-out;
   }
   @keyframes rb-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+  .reminder-banner.rb-pulse { animation: rb-in 0.22s ease-out, rb-pulse-ring 1.4s ease-out 0.3s 4; }
+  @keyframes rb-pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow-lg); }
+    70% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent), var(--shadow-lg); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent), var(--shadow-lg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .reminder-banner.rb-pulse { animation: none; } }
   .reminder-banner .rb-icon {
     width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.25);
@@ -2648,11 +2655,39 @@
     root.appendChild(b);
   }
 
+  // Toca um "ding-dong" curto gerado na hora (sem depender de nenhum
+  // arquivo de áudio) quando o lembrete aparece com o app já aberto. A
+  // vibração do celular não é uma opção confiável aqui — o iPhone/Safari
+  // não expõe essa API pra nenhum site, só o Android suporta.
+  function playReminderChime() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var now = ctx.currentTime;
+      [880, 660].forEach(function (freq, i) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        var start = now + i * 0.16;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.4);
+      });
+      setTimeout(function () { ctx.close(); }, 900);
+    } catch (e) { /* autoplay bloqueado ou sem suporte — o pulso visual ainda avisa */ }
+  }
+
   var reminderTimer = null;
   function showReminderBanner(title, sub) {
     var root = document.getElementById("reminder-root");
     var b = el(
-      '<div class="reminder-banner">' +
+      '<div class="reminder-banner rb-pulse">' +
         '<img class="rb-icon" src="icons/icon-192.png" alt="" />' +
         '<div class="rb-body">' +
           '<div class="rb-app-row"><span class="rb-app-name">ÓRBITA</span><span class="rb-app-time">agora</span></div>' +
@@ -2662,8 +2697,10 @@
         '<button class="rb-close">' + ic("x", 13) + '</button>' +
       '</div>'
     );
-    // Fica na tela até o usuário fechar — igual à notificação push
-    // (requireInteraction), pra não sumir antes da pessoa notar.
+    playReminderChime();
+    // Pulsa por alguns segundos pra chamar atenção, depois fica parado (mas
+    // continua na tela até o usuário fechar — igual à notificação push).
+    setTimeout(function () { b.classList.remove("rb-pulse"); }, 6000);
     b.querySelector(".rb-close").addEventListener("click", function () { b.remove(); });
     root.appendChild(b);
   }
@@ -3240,6 +3277,10 @@
     renderView();
     checkReminders();
     reminderTimer = setInterval(checkReminders, 30000);
+    // "Destrava" áudio no primeiro toque em qualquer lugar do app (não só no
+    // chat da IA), pra dar a melhor chance do som do lembrete tocar mesmo se
+    // o usuário nunca abriu o assistente antes de um compromisso chegar.
+    document.addEventListener("pointerdown", unlockAudioForSpeech, { once: true, passive: true });
   }
 
   /* ============ AUTH SCREEN ============ */
