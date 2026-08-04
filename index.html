@@ -2662,9 +2662,10 @@
         '<button class="rb-close">' + ic("x", 13) + '</button>' +
       '</div>'
     );
+    // Fica na tela até o usuário fechar — igual à notificação push
+    // (requireInteraction), pra não sumir antes da pessoa notar.
     b.querySelector(".rb-close").addEventListener("click", function () { b.remove(); });
     root.appendChild(b);
-    setTimeout(function () { if (b.parentNode) b.remove(); }, 12000);
   }
 
   /* ============ AI ASSISTANT ============ */
@@ -2724,19 +2725,23 @@
 
   function pickGreeting() {
     var name = state.settings.name;
-    var aiName = state.settings.aiName || "Sofia";
-    var isFem = state.settings.aiVoiceGender !== "masculina";
-    var intro = "Sou " + (isFem ? "a " : "o ") + aiName + ".";
     var withName = function (s) { return name ? s.replace("{n}", name) : s.replace(", {n}", "").replace("{n}", "").trim(); };
+    // Ela já se apresentou uma vez (o nome está bem visível na tela do chat)
+    // — não precisa repetir "sou a Fulana" toda vez que abre, isso não é
+    // como uma pessoa que já te conhece fala. Um toque de hora do dia deixa
+    // mais pessoal sem soar repetitivo.
+    var hour = new Date().getHours();
+    var timeGreet = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
     var templates = [
-      withName("E aí, {n}! Tudo certo por aí? " + intro + " Bora organizar seu dia?"),
-      withName("Fala, {n}! " + intro + " Como posso te ajudar agora?"),
-      withName("Iaí! Como você está, {n}?") + " " + intro,
-      withName("Bom te ver de novo, {n}.") + " Em que posso ajudar?",
+      withName(timeGreet + ", {n}! Tudo certo por aí? Bora organizar seu dia?"),
+      withName("Fala, {n}! Como posso te ajudar agora?"),
+      withName("Iaí! Como você está, {n}?"),
+      withName("Bom te ver de novo, {n}. Em que posso ajudar?"),
       withName("Opa! Vamos resolver isso, {n}?"),
-      withName("Que bom que você apareceu, {n}. ") + intro,
-      "E aí, chefe! " + intro + " Em que posso te ajudar?",
-      withName("Como posso facilitar seu dia hoje, {n}?")
+      withName("Que bom que você apareceu, {n}."),
+      "E aí, chefe! Em que posso te ajudar?",
+      withName("Como posso facilitar seu dia hoje, {n}?"),
+      withName(timeGreet + ", {n}. O que manda?")
     ];
     return templates[Math.floor(Math.random() * templates.length)];
   }
