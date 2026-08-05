@@ -128,10 +128,42 @@ const TOOLS = [
         properties: {
           title: { type: "string" },
           dueDate: { type: "string", description: "AAAA-MM-DD, opcional" },
-          priority: { type: "string", enum: ["baixa", "media", "alta"] },
-          category: { type: "string" },
+          dueTime: { type: "string", description: "Hora no formato HH:MM (24h), opcional" },
+          priority: { type: "string", enum: ["baixa", "media", "alta", "urgente"] },
+          repeat: { type: "string", enum: ["none", "daily", "weekly", "monthly", "yearly"] },
+          category: { type: "string", description: "Ex.: 💈 Barbearia, 💰 Financeiro, 👨‍👩‍👦 Família, 🏋️ Saúde, 📚 Estudos, 🚗 Pessoal, 📱 Marketing, 💼 Empresa, 🤝 Clientes, ou outra que o usuário pedir" },
+          location: { type: "string" },
+          tags: { type: "array", items: { type: "string" }, description: "Etiquetas curtas, sem o #" },
+          estimateMinutes: { type: "number", description: "Estimativa de duração em minutos" },
+          reminderLead: { type: "number", description: "Minutos antes do horário (dueTime) pra avisar por notificação — só funciona se dueTime estiver definido" },
+          notes: { type: "string" },
         },
         required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_task",
+      description: "Atualiza uma tarefa existente. Use o id exato que aparece no contexto de tarefas.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          dueDate: { type: "string" },
+          dueTime: { type: "string" },
+          priority: { type: "string", enum: ["baixa", "media", "alta", "urgente"] },
+          repeat: { type: "string", enum: ["none", "daily", "weekly", "monthly", "yearly"] },
+          category: { type: "string" },
+          location: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+          estimateMinutes: { type: "number" },
+          reminderLead: { type: "number" },
+          notes: { type: "string" },
+        },
+        required: ["id"],
       },
     },
   },
@@ -226,6 +258,8 @@ function describeActionsPt(actions: Array<{ name: string; arguments: Record<stri
         return `excluí o compromisso${title ? ` "${title}"` : ""}`;
       case "create_task":
         return `criei a tarefa "${title}"`;
+      case "update_task":
+        return `atualizei a tarefa${title ? ` "${title}"` : ""}`;
       case "delete_task":
         return `excluí a tarefa${title ? ` "${title}"` : ""}`;
       default:

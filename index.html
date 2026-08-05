@@ -1191,6 +1191,43 @@
     var r = REPEAT_OPTIONS.filter(function (x) { return x.id === id; })[0];
     return r ? r.label : "";
   }
+  var TASK_CATEGORY_PRESETS = [
+    "💈 Barbearia", "💰 Financeiro", "👨‍👩‍👦 Família", "🏋️ Saúde",
+    "📚 Estudos", "🚗 Pessoal", "📱 Marketing", "💼 Empresa", "🤝 Clientes"
+  ];
+  var TASK_ESTIMATE_OPTIONS = [
+    { id: "", label: "Sem estimativa" },
+    { id: "15", label: "15 min" },
+    { id: "30", label: "30 min" },
+    { id: "45", label: "45 min" },
+    { id: "60", label: "1 hora" },
+    { id: "120", label: "2 horas" },
+    { id: "240", label: "4 horas" }
+  ];
+  function estimateLabel(minutes) {
+    var m = Number(minutes);
+    if (!m) return "";
+    var preset = TASK_ESTIMATE_OPTIONS.filter(function (o) { return Number(o.id) === m; })[0];
+    if (preset) return preset.label;
+    return m >= 60 ? (m / 60) + "h" : m + " min";
+  }
+  var TASK_REMINDER_OPTIONS = [
+    { id: "", label: "Sem lembrete" },
+    { id: "15", label: "15 min antes" },
+    { id: "30", label: "30 min antes" },
+    { id: "60", label: "1 hora antes" },
+    { id: "1440", label: "1 dia antes" }
+  ];
+  function advanceTaskDueDate(dateISOStr, repeat) {
+    if (!dateISOStr || !repeat || repeat === "none") return dateISOStr;
+    var d = new Date(dateISOStr + "T00:00:00");
+    if (repeat === "daily") d.setDate(d.getDate() + 1);
+    else if (repeat === "weekly") d.setDate(d.getDate() + 7);
+    else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
+    else if (repeat === "yearly") d.setFullYear(d.getFullYear() + 1);
+    else return dateISOStr;
+    return toISO(d);
+  }
   function appointmentOccursOn(a, dateISO) {
     if (a.date === dateISO) return true;
     if (!a.repeat || a.repeat === "none") return false;
@@ -1916,10 +1953,25 @@
     return wrap;
   }
 
+  // Conclui a tarefa; se ela for recorrente e tiver prazo, em vez de marcar
+  // como feita de verdade, avança o prazo pro próximo ciclo e reabre tudo —
+  // assim evita ter que recriar a mesma tarefa toda semana/mês manualmente.
+  function markTaskDone(t, done) {
+    if (done && t.repeat && t.repeat !== "none" && t.dueDate) {
+      t.dueDate = advanceTaskDueDate(t.dueDate, t.repeat);
+      t.done = false;
+      if (t.subtasks) t.subtasks.forEach(function (s) { s.done = false; });
+      showToast("Tarefa recorrente reiniciada para " + t.dueDate.split("-").reverse().join("/") + ".");
+    } else {
+      t.done = done;
+    }
+    persist(); renderView();
+  }
+
   function taskRow(t) {
     var li = el('<li class="card task-row' + (t.done ? " done" : "") + '"></li>');
     var cb = el('<div class="checkbox' + (t.done ? " done" : "") + '">' + (t.done ? ic("check2", 12) : "") + '</div>');
-    cb.addEventListener("click", function () { t.done = !t.done; persist(); renderView(); });
+    cb.addEventListener("click", function () { markTaskDone(t, !t.done); });
     li.appendChild(cb);
 
     var body = el('<div class="tbody"></div>');
@@ -1928,16 +1980,29 @@
       '<div class="ttitle">' + escapeHtml(t.title) + '</div>' +
       '<div class="task-meta">' +
         priorityPill(t.priority) +
-        (t.dueDate ? '<span class="mono">📅 ' + t.dueDate.split("-").reverse().join("/") + '</span>' : '') +
+        (t.dueDate ? '<span class="mono">📅 ' + t.dueDate.split("-").reverse().join("/") + (t.dueTime ? " · 🕒 " + t.dueTime : "") + '</span>' : '') +
+        (t.repeat && t.repeat !== "none" ? '<span>' + ic("repeat", 11).replace('class="ic"', 'class="ic" style="vertical-align:-1px;"') + " " + repeatLabel(t.repeat) + '</span>' : '') +
         (t.category ? '<span>' + escapeHtml(t.category) + '</span>' : '') +
+        (t.location ? '<span>📍 ' + escapeHtml(t.location) + '</span>' : '') +
+        (t.estimateMinutes ? '<span>⏱️ ' + estimateLabel(t.estimateMinutes) + '</span>' : '') +
         (t.subtasks && t.subtasks.length ? '<span>' + doneSubs + '/' + t.subtasks.length + ' subtarefas</span>' : '') +
-      '</div>';
+      '</div>' +
+      (t.tags && t.tags.length ? '<div class="task-meta" style="margin-top:4px;">' + t.tags.map(function (tag) { return '<span class="pill" style="background:var(--surface-2);color:var(--text-muted);">#' + escapeHtml(tag) + '</span>'; }).join("") + '</div>' : '');
     if (t.subtasks && t.subtasks.length) {
       var subUl = el('<ul class="subtask-list"></ul>');
       t.subtasks.forEach(function (s) {
         var sRow = el('<li class="subtask-row' + (s.done ? " done" : "") + '"></li>');
         var scb = el('<div class="checkbox' + (s.done ? " done" : "") + '" style="width:15px;height:15px;">' + (s.done ? ic("check2", 9) : "") + '</div>');
-        scb.addEventListener("click", function (e) { e.stopPropagation(); s.done = !s.done; persist(); renderView(); });
+        scb.addEventListener("click", function (e) {
+          e.stopPropagation();
+          s.done = !s.done;
+          // Quando a última subtarefa é concluída, a tarefa principal
+          // acompanha automaticamente (e vice-versa, se desmarcar alguma).
+          var allDone = t.subtasks.length > 0 && t.subtasks.every(function (x) { return x.done; });
+          if (allDone) { markTaskDone(t, true); return; }
+          t.done = false;
+          persist(); renderView();
+        });
         sRow.appendChild(scb);
         sRow.appendChild(el('<span class="stxt">' + escapeHtml(s.text) + '</span>'));
         subUl.appendChild(sRow);
@@ -1962,28 +2027,59 @@
 
   function openTaskModal(existing) {
     var isEdit = !!existing;
-    var t = existing || { id: null, title: "", dueDate: "", priority: "media", category: "", notes: "", subtasks: [], done: false };
+    var t = existing || {
+      id: null, title: "", dueDate: "", dueTime: "", priority: "media", repeat: "none",
+      category: "", location: "", tags: [], estimateMinutes: null, reminderLead: null,
+      notes: "", subtasks: [], done: false
+    };
     var subtasksDraft = (t.subtasks || []).slice();
+    var isPresetCategory = t.category && TASK_CATEGORY_PRESETS.indexOf(t.category) !== -1;
 
     var body =
-      '<div class="field"><label>Título</label><input id="tm-title" value="' + escapeHtml(t.title) + '" placeholder="Ex.: Preparar apresentação" /></div>' +
+      '<div class="field"><label>Título</label><input id="tm-title" value="' + escapeHtml(t.title) + '" placeholder="Ex.: Conferir fluxo de caixa" /></div>' +
       '<div class="row2">' +
         '<div class="field"><label>Prazo</label><input id="tm-due" type="date" value="' + (t.dueDate || "") + '" /></div>' +
-        '<div class="field"><label>Prioridade</label><select id="tm-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p.id + '"' + (p.id === t.priority ? " selected" : "") + '>' + p.label + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label>Hora</label><input id="tm-time" type="time" value="' + (t.dueTime || "") + '" /></div>' +
       '</div>' +
-      '<div class="field"><label>Categoria</label><input id="tm-category" value="' + escapeHtml(t.category || "") + '" placeholder="Trabalho, Pessoal..." /></div>' +
+      '<div class="row2">' +
+        '<div class="field"><label>Prioridade</label><select id="tm-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p.id + '"' + (p.id === t.priority ? " selected" : "") + '>' + p.label + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label>Repetição</label><select id="tm-repeat">' + REPEAT_OPTIONS.map(function (r) { return '<option value="' + r.id + '"' + (r.id === (t.repeat || "none") ? " selected" : "") + '>' + r.label + '</option>'; }).join("") + '</select></div>' +
+      '</div>' +
+      '<div class="field"><label>Categoria</label>' +
+        '<select id="tm-category">' +
+          '<option value="">Nenhuma</option>' +
+          TASK_CATEGORY_PRESETS.map(function (c) { return '<option value="' + escapeHtml(c) + '"' + (c === t.category ? " selected" : "") + '>' + c + '</option>'; }).join("") +
+          '<option value="__custom__"' + (t.category && !isPresetCategory ? " selected" : "") + '>Outra...</option>' +
+        '</select>' +
+        '<input id="tm-category-custom" placeholder="Digite a categoria" style="margin-top:6px;' + (t.category && !isPresetCategory ? "" : "display:none;") + '" value="' + escapeHtml(t.category && !isPresetCategory ? t.category : "") + '" />' +
+      '</div>' +
+      '<div class="row2">' +
+        '<div class="field"><label>Estimativa</label><select id="tm-estimate">' + TASK_ESTIMATE_OPTIONS.map(function (o) { return '<option value="' + o.id + '"' + (o.id === String(t.estimateMinutes || "") ? " selected" : "") + '>' + o.label + '</option>'; }).join("") + '</select></div>' +
+        '<div class="field"><label>Lembrete</label><select id="tm-reminder">' + TASK_REMINDER_OPTIONS.map(function (o) { return '<option value="' + o.id + '"' + (o.id === String(t.reminderLead || "") ? " selected" : "") + '>' + o.label + '</option>'; }).join("") + '</select><span style="font-size:0.72rem;color:var(--text-faint);margin-top:3px;">Só funciona com Hora definida.</span></div>' +
+      '</div>' +
+      '<div class="field"><label>Local</label><div style="display:flex;gap:8px;"><input id="tm-location" placeholder="Ex.: Kronos Barbearia" style="flex:1;" value="' + escapeHtml(t.location || "") + '" /><button type="button" class="btn btn-ghost btn-sm" id="tm-location-map" title="Abrir no mapa">📍</button></div></div>' +
+      '<div class="field"><label>Etiquetas</label><input id="tm-tags" placeholder="Ex.: importante, cliente" value="' + escapeHtml((t.tags || []).join(", ")) + '" /></div>' +
       '<div class="field"><label>Subtarefas</label><div id="tm-subtasks"></div>' +
-        '<div style="display:flex;gap:8px;margin-top:6px;"><input id="tm-sub-input" placeholder="Adicionar subtarefa" style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;" /><button type="button" class="btn btn-ghost btn-sm" id="tm-sub-add">Adicionar</button></div>' +
+        '<div style="display:flex;gap:8px;margin-top:6px;"><input id="tm-sub-input" placeholder="Adicionar subtarefa" style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;" /><button type="button" class="btn btn-ghost btn-sm" id="tm-sub-add" title="Adicionar subtarefa">' + ic("plus", 14) + '</button></div>' +
       '</div>' +
       '<div class="field"><label>Notas</label><textarea id="tm-notes" rows="2">' + escapeHtml(t.notes || "") + '</textarea></div>';
 
     var footer =
       '<div class="modal-actions">' +
         (isEdit ? '<button class="btn btn-danger" id="tm-delete">Excluir</button>' : '') +
-        '<button class="btn btn-accent" id="tm-save">' + (isEdit ? "Salvar alterações" : "Adicionar") + '</button>' +
+        '<button class="btn btn-accent" id="tm-save">' + (isEdit ? "Salvar alterações" : "Salvar tarefa") + '</button>' +
       '</div>';
 
     var modal = openModal(isEdit ? "Editar tarefa" : "Nova tarefa", body, footer);
+
+    modal.querySelector("#tm-category").addEventListener("change", function (e) {
+      modal.querySelector("#tm-category-custom").style.display = e.target.value === "__custom__" ? "" : "none";
+    });
+    modal.querySelector("#tm-location-map").addEventListener("click", function () {
+      var v = modal.querySelector("#tm-location").value.trim();
+      if (!v) return;
+      window.open("https://maps.google.com/?q=" + encodeURIComponent(v), "_blank");
+    });
 
     function renderSubtasks() {
       var box = modal.querySelector("#tm-subtasks");
@@ -2015,11 +2111,24 @@
     modal.querySelector("#tm-save").addEventListener("click", function () {
       var title = modal.querySelector("#tm-title").value.trim();
       if (!title) { showToast("Digite um título para a tarefa."); return; }
+      var categorySelected = modal.querySelector("#tm-category").value;
+      var category = categorySelected === "__custom__"
+        ? modal.querySelector("#tm-category-custom").value.trim()
+        : categorySelected;
+      var tags = modal.querySelector("#tm-tags").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      var estimateVal = modal.querySelector("#tm-estimate").value;
+      var reminderVal = modal.querySelector("#tm-reminder").value;
       var data = {
         title: title,
         dueDate: modal.querySelector("#tm-due").value,
+        dueTime: modal.querySelector("#tm-time").value,
         priority: modal.querySelector("#tm-priority").value,
-        category: modal.querySelector("#tm-category").value.trim(),
+        repeat: modal.querySelector("#tm-repeat").value,
+        category: category,
+        location: modal.querySelector("#tm-location").value.trim(),
+        tags: tags,
+        estimateMinutes: estimateVal ? Number(estimateVal) : null,
+        reminderLead: reminderVal ? Number(reminderVal) : null,
         notes: modal.querySelector("#tm-notes").value.trim(),
         subtasks: subtasksDraft
       };
@@ -2718,7 +2827,12 @@
       };
     });
     var taskCtx = state.tasks.filter(function (t) { return !t.done; }).map(function (t) {
-      return { id: t.id, title: t.title, dueDate: t.dueDate || "", priority: t.priority };
+      return {
+        id: t.id, title: t.title, dueDate: t.dueDate || "", dueTime: t.dueTime || "",
+        priority: t.priority, repeat: t.repeat || "none", category: t.category || "",
+        location: t.location || "", tags: t.tags || [],
+        estimateMinutes: t.estimateMinutes || null, reminderLead: t.reminderLead || null
+      };
     });
     return {
       today: todayISO(),
@@ -2839,7 +2953,9 @@
       case "delete_appointment":
         return 'Exclusão do compromisso "' + (p.title || "selecionado") + '".';
       case "create_task":
-        return 'Tarefa "' + (p.title || "") + '"' + (p.dueDate ? ' com prazo em ' + fmtDateBR(p.dueDate) : '') + '.';
+        return 'Tarefa "' + (p.title || "") + '"' + (p.dueDate ? ' com prazo em ' + fmtDateBR(p.dueDate) + (p.dueTime ? ' às ' + p.dueTime : '') : '') + '.';
+      case "update_task":
+        return 'Atualização da tarefa' + (p.title ? ' "' + p.title + '"' : "") + '.';
       case "delete_task":
         return 'Exclusão da tarefa "' + (p.title || "selecionada") + '".';
       default:
@@ -2882,11 +2998,26 @@
       case "create_task": {
         if (!p.title) return { ok: false, msg: "Falta o título da tarefa." };
         state.tasks.push({
-          id: genId(), title: p.title, dueDate: p.dueDate || "", priority: p.priority || "media",
-          category: p.category || "", notes: "", subtasks: [], done: false
+          id: genId(), title: p.title, dueDate: p.dueDate || "", dueTime: p.dueTime || "",
+          priority: p.priority || "media", repeat: p.repeat || "none",
+          category: p.category || "", location: p.location || "",
+          tags: Array.isArray(p.tags) ? p.tags : [],
+          estimateMinutes: p.estimateMinutes || null, reminderLead: p.reminderLead || null,
+          notes: p.notes || "", subtasks: [], done: false
         });
         persist(); renderView();
         return { ok: true, msg: "Tarefa criada." };
+      }
+      case "update_task": {
+        var idxT = state.tasks.findIndex(function (x) { return x.id === p.id; });
+        if (idxT === -1) return { ok: false, msg: "Não encontrei essa tarefa." };
+        var patchT = {};
+        ["title", "dueDate", "dueTime", "priority", "repeat", "category", "location", "tags", "estimateMinutes", "reminderLead", "notes"].forEach(function (k) {
+          if (p[k] !== undefined && p[k] !== null) patchT[k] = p[k];
+        });
+        state.tasks[idxT] = Object.assign({}, state.tasks[idxT], patchT);
+        persist(); renderView();
+        return { ok: true, msg: "Tarefa atualizada." };
       }
       case "delete_task": {
         var beforeT = state.tasks.length;
