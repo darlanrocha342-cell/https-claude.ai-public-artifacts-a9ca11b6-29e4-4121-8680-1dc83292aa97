@@ -59,6 +59,37 @@ function appointmentOccursOn(a: any, dateISO: string): boolean {
   return false;
 }
 
+async function sendPushToUser(userId: string, payload: string): Promise<boolean> {
+  const { data: subs } = await sb.from("push_subscriptions").select("*").eq("user_id", userId);
+  if (!subs || !subs.length) return false;
+  let anySent = false;
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        payload,
+      );
+      anySent = true;
+    } catch (err) {
+      const statusCode = (err as { statusCode?: number }).statusCode;
+      if (statusCode === 404 || statusCode === 410) {
+        await sb.from("push_subscriptions").delete().eq("id", s.id);
+      }
+    }
+  }
+  return anySent;
+}
+
+async function alreadySent(userId: string, reminderKey: string): Promise<boolean> {
+  const { data } = await sb
+    .from("sent_reminders")
+    .select("reminder_key")
+    .eq("user_id", userId)
+    .eq("reminder_key", reminderKey)
+    .maybeSingle();
+  return !!data;
+}
+
 Deno.serve(async () => {
   try {
     const { data: rows, error } = await sb.from("app_state").select("user_id, data");
@@ -69,13 +100,11 @@ Deno.serve(async () => {
     for (const row of rows ?? []) {
       // deno-lint-ignore no-explicit-any
       const state: any = row.data || {};
-      const appts: any[] = state.appointments || [];
-      if (!appts.length) continue;
-
       const tz = state.settings?.timezone || "America/Sao_Paulo";
       const today = todayInTZ(tz);
       const nowMinutes = nowMinutesInTZ(tz);
 
+      const appts: any[] = state.appointments || [];
       for (const a of appts) {
         if (!a.time || !appointmentOccursOn(a, today)) continue;
         const [th, tm] = a.time.split(":").map(Number);
@@ -83,19 +112,7 @@ Deno.serve(async () => {
         if (diff < 9 || diff > 11) continue; // ~10 min antes, com folga de 2 min pro cron de 1 min
 
         const reminderKey = `${a.id}|${today}`;
-        const { data: already } = await sb
-          .from("sent_reminders")
-          .select("reminder_key")
-          .eq("user_id", row.user_id)
-          .eq("reminder_key", reminderKey)
-          .maybeSingle();
-        if (already) continue;
-
-        const { data: subs } = await sb
-          .from("push_subscriptions")
-          .select("*")
-          .eq("user_id", row.user_id);
-        if (!subs || !subs.length) continue;
+        if (await alreadySent(row.user_id, reminderKey)) continue;
 
         const payload = JSON.stringify({
           title: "ÓRBITA — compromisso em breve",
@@ -106,20 +123,36 @@ Deno.serve(async () => {
           apptLocation: a.location || "",
         });
 
-        for (const s of subs) {
-          try {
-            await webpush.sendNotification(
-              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-              payload,
-            );
-          } catch (err) {
-            const statusCode = (err as { statusCode?: number }).statusCode;
-            if (statusCode === 404 || statusCode === 410) {
-              await sb.from("push_subscriptions").delete().eq("id", s.id);
-            }
-          }
-        }
+        if (!(await sendPushToUser(row.user_id, payload))) continue;
+        await sb.from("sent_reminders").upsert({ user_id: row.user_id, reminder_key: reminderKey });
+        sent++;
+      }
 
+      // Tarefas com Hora + Lembrete definidos (ver campo "Lembrete" no
+      // formulário de tarefa) — dispara N minutos antes do horário, uma vez
+      // só por dia, igual aos compromissos.
+      const tasks: any[] = state.tasks || [];
+      for (const t of tasks) {
+        if (t.done || !t.dueDate || !t.dueTime || !t.reminderLead) continue;
+        if (t.dueDate !== today) continue;
+        const [th, tm] = t.dueTime.split(":").map(Number);
+        const notifyAtMinutes = th * 60 + tm - Number(t.reminderLead);
+        const diff = notifyAtMinutes - nowMinutes;
+        if (diff < -1 || diff > 1) continue; // janela de 1 min pra cada lado, cron roda a cada minuto
+
+        const reminderKey = `task:${t.id}|${today}`;
+        if (await alreadySent(row.user_id, reminderKey)) continue;
+
+        const payload = JSON.stringify({
+          title: "ÓRBITA — tarefa",
+          body: `${t.title} às ${t.dueTime}${t.location ? " · " + t.location : ""}`,
+          url: "./",
+          apptTitle: t.title,
+          apptTime: t.dueTime,
+          apptLocation: t.location || "",
+        });
+
+        if (!(await sendPushToUser(row.user_id, payload))) continue;
         await sb.from("sent_reminders").upsert({ user_id: row.user_id, reminder_key: reminderKey });
         sent++;
       }
