@@ -2037,6 +2037,7 @@
 
     var body =
       '<div class="field"><label>Título</label><input id="tm-title" value="' + escapeHtml(t.title) + '" placeholder="Ex.: Conferir fluxo de caixa" /></div>' +
+      '<div class="field"><button type="button" class="btn btn-ghost btn-sm" id="tm-organize-ai" style="align-self:flex-start;">✨ Organizar com IA</button></div>' +
       '<div class="row2">' +
         '<div class="field"><label>Prazo</label><input id="tm-due" type="date" value="' + (t.dueDate || "") + '" /></div>' +
         '<div class="field"><label>Hora</label><input id="tm-time" type="time" value="' + (t.dueTime || "") + '" /></div>' +
@@ -2079,6 +2080,66 @@
       var v = modal.querySelector("#tm-location").value.trim();
       if (!v) return;
       window.open("https://maps.google.com/?q=" + encodeURIComponent(v), "_blank");
+    });
+
+    // "✨ Organizar com IA": manda só o título pra IA e pré-preenche
+    // prioridade, categoria, estimativa, subtarefas e etiquetas — o usuário
+    // ainda revisa e pode ajustar tudo antes de salvar.
+    modal.querySelector("#tm-organize-ai").addEventListener("click", function () {
+      var titleNow = modal.querySelector("#tm-title").value.trim();
+      if (!titleNow) { showToast("Digite um título primeiro."); return; }
+      var btn = modal.querySelector("#tm-organize-ai");
+      var originalLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Organizando...";
+      sb.functions.invoke(AI_FUNCTION_NAME, { body: { organizeTask: titleNow } }).then(function (res) {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        if (res.error) { showToast("Não consegui organizar agora. Tente de novo."); return; }
+        var data = res.data || {};
+        if (data.error) { showToast(data.error); return; }
+        var s = data.suggestion || {};
+
+        if (s.priority && PRIORITIES.some(function (p) { return p.id === s.priority; })) {
+          modal.querySelector("#tm-priority").value = s.priority;
+        }
+        if (s.category) {
+          var catSelect = modal.querySelector("#tm-category");
+          var catCustom = modal.querySelector("#tm-category-custom");
+          if (TASK_CATEGORY_PRESETS.indexOf(s.category) !== -1) {
+            catSelect.value = s.category;
+            catCustom.style.display = "none";
+          } else {
+            catSelect.value = "__custom__";
+            catCustom.style.display = "";
+            catCustom.value = s.category;
+          }
+        }
+        if (s.estimateMinutes) {
+          var estStr = String(s.estimateMinutes);
+          var estSelect = modal.querySelector("#tm-estimate");
+          estSelect.value = TASK_ESTIMATE_OPTIONS.some(function (o) { return o.id === estStr; }) ? estStr : "";
+        }
+        if (Array.isArray(s.tags) && s.tags.length) {
+          var tagsInput = modal.querySelector("#tm-tags");
+          var existingTags = tagsInput.value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+          s.tags.forEach(function (tag) { if (existingTags.indexOf(tag) === -1) existingTags.push(tag); });
+          tagsInput.value = existingTags.join(", ");
+        }
+        if (Array.isArray(s.subtasks) && s.subtasks.length) {
+          s.subtasks.forEach(function (txt) {
+            if (typeof txt === "string" && txt.trim() && !subtasksDraft.some(function (sd) { return sd.text === txt; })) {
+              subtasksDraft.push({ id: genId(), text: txt.trim(), done: false });
+            }
+          });
+          renderSubtasks();
+        }
+        showToast("Sugestões aplicadas! Revise antes de salvar.");
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        showToast("Não consegui organizar agora. Tente de novo.");
+      });
     });
 
     function renderSubtasks() {

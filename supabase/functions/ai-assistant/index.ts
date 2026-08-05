@@ -59,6 +59,13 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Mesma lista de presets do seletor de categoria no formulário de tarefa
+// (index.html, TASK_CATEGORY_PRESETS) — mantenha as duas em sincronia.
+const TASK_CATEGORY_PRESETS = [
+  "💈 Barbearia", "💰 Financeiro", "👨‍👩‍👦 Família", "🏋️ Saúde",
+  "📚 Estudos", "🚗 Pessoal", "📱 Marketing", "💼 Empresa", "🤝 Clientes",
+];
+
 const TOOLS = [
   {
     type: "function",
@@ -382,6 +389,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const message: string = body.message || "";
     const ttsOnly: string = body.ttsOnly || "";
+    const organizeTaskTitle: string = body.organizeTask || "";
     const history: Array<{ role: string; content: string }> = Array.isArray(body.history) ? body.history : [];
     const context = body.context || {};
     const requestedVoice: string = body.voice || OPENAI_TTS_VOICE;
@@ -393,6 +401,59 @@ Deno.serve(async (req) => {
     if (ttsOnly.trim()) {
       const audioBase64 = await synthesizeSpeech(ttsOnly, requestedVoice, requestedSpeed);
       return new Response(JSON.stringify({ answer: ttsOnly, actions: [], audioBase64, audioMime: "audio/mpeg" }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // Botão "✨ Organizar com IA" no formulário de tarefa: recebe só o
+    // título e devolve sugestões estruturadas (prioridade, categoria,
+    // estimativa, subtarefas, etiquetas) em JSON pra pré-preencher o
+    // formulário — o usuário ainda revisa e confirma antes de salvar.
+    if (organizeTaskTitle.trim()) {
+      const orgRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "Você ajuda a preencher formulários de tarefas de forma objetiva e realista. Responda SOMENTE com um JSON válido, sem nenhum texto antes ou depois.",
+            },
+            {
+              role: "user",
+              content:
+                `Título da tarefa: "${organizeTaskTitle.trim()}"\n\n` +
+                `Categorias disponíveis: ${TASK_CATEGORY_PRESETS.join(", ")}\n\n` +
+                `Devolva um JSON exatamente neste formato:\n` +
+                `{"priority":"baixa|media|alta|urgente","category":"uma das categorias disponíveis ou \\"\\"","estimateMinutes":numero_ou_null,"subtasks":["passo 1","passo 2"],"tags":["tag1","tag2"]}\n\n` +
+                `Regras: priority reflete a urgência real sugerida pelo título. category só pode ser uma das disponíveis, ou "" se nenhuma fizer sentido — nunca invente uma nova. estimateMinutes é um número realista em minutos (entre 10 e 240) ou null se não der pra estimar. subtasks: gere de 0 a 6 passos curtos e concretos SÓ se o título realmente sugerir etapas distintas (não force). tags: 0 a 3 palavras-chave curtas, em português, sem o símbolo #.`,
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          max_tokens: 400,
+        }),
+      });
+
+      if (!orgRes.ok) {
+        console.error("organizeTask error:", orgRes.status, await orgRes.text());
+        return new Response(JSON.stringify({ error: "Não consegui organizar essa tarefa agora. Tente de novo." }), {
+          status: 502,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+
+      const orgData = await orgRes.json();
+      let suggestion: Record<string, unknown> = {};
+      try {
+        suggestion = JSON.parse(orgData.choices?.[0]?.message?.content || "{}");
+      } catch (_e) { /* devolve vazio se vier mal formado */ }
+
+      return new Response(JSON.stringify({ suggestion }), {
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
