@@ -51,6 +51,27 @@ e acessar `http://localhost:8000`.
    arraste a pasta do projeto direto na tela de deploy do Netlify.
 3. Build command: (vazio) — Publish directory: `.`
 
+## Portão de acesso (chave compartilhada)
+
+Antes de chegar na tela de login, dá pra exigir uma chave de acesso única
+(a mesma para todo mundo que você autorizar) — útil pra manter o app fora
+do alcance de quem não deveria estar testando ainda.
+
+**Como ativar:** abra `index.html`, procure `const ACCESS_KEY` (perto do
+bloco do Supabase) e troque o valor padrão pela sua chave, por exemplo:
+`const ACCESS_KEY = 'atlas2026';`. Salve — pronto, agora a primeira tela
+que qualquer pessoa vê é o portão com a logo do ATLAS pedindo essa chave.
+Quem digitar certo uma vez fica liberado naquele aparelho/navegador (não
+precisa repetir a cada visita). Enquanto o valor for o padrão de fábrica, o
+portão fica desligado e o app abre direto, como hoje.
+
+**Importante:** isso é um filtro simples, não segurança de verdade — como o
+ATLAS é um arquivo estático sem servidor, a chave fica visível a quem abrir
+o código-fonte da página (Ctrl+U). Serve pra manter curiosos/buscadores de
+fora durante um teste fechado, não pra proteger dados de alguém disposto a
+inspecionar o código. Pra controle de acesso robusto, o caminho seria
+desativar cadastro público no Supabase Auth e criar as contas manualmente.
+
 ## Banco de dados e login (Supabase) — integrado
 
 O ATLAS já fala com o Supabase: login/cadastro por e-mail e senha, e todo

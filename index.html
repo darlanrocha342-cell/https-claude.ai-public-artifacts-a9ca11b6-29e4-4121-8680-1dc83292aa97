@@ -401,6 +401,19 @@ const CLOUD_ENABLED = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.l
 const sb = CLOUD_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let session = null;
 
+/* ---------- Chave de acesso (portão de entrada) ----------
+   Troque o valor abaixo pela sua chave de acesso privada. Enquanto ela
+   ficar com o valor padrão, o portão fica desligado e o app abre direto.
+   Aviso: como o ATLAS é um arquivo estático (sem servidor), essa chave
+   fica visível a quem abrir o código-fonte da página — funciona como um
+   filtro simples para manter curiosos de fora, não como segurança real
+   contra alguém decidido a burlar. */
+const ACCESS_KEY = 'COLE_AQUI_SUA_CHAVE_DE_ACESSO';
+const ACCESS_GATE_ENABLED = ACCESS_KEY !== 'COLE_AQUI_SUA_CHAVE_DE_ACESSO' && ACCESS_KEY.length > 0;
+const GATE_STORAGE_KEY = 'atlas_gate_unlocked_v1';
+let gateError = '';
+let gateBusy = false;
+
 /* Conjunto de ícones de linha, autorais — substitui emojis genéricos do sistema
    por um único estilo consistente (mesmo espírito da marca ÓRBITA). */
 const ICONS = {
@@ -2103,6 +2116,40 @@ function handleImport(e){
   reader.readAsText(file);
 }
 
+/* ---------- Portão de acesso ---------- */
+function renderAccessGate(){
+  document.getElementById('fabAdd').style.display = 'none';
+  document.querySelector('.tabbar').style.display = 'none';
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div class="auth-screen">
+    <div class="brand-mark" style="width:56px;height:56px;">${atlasMarkSVG()}</div>
+    <div style="text-align:center;">
+      <div style="font-weight:800;font-size:19px;">ATLAS</div>
+      <div style="font-size:11.5px;color:var(--text-mute);margin-top:2px;">Acesso restrito — insira a chave de acesso</div>
+    </div>
+    <div class="auth-card">
+      <form id="gateForm">
+        <div class="field"><label>Chave de acesso</label><input required type="password" id="gateKeyInput" placeholder="Digite a chave" autocomplete="off" autofocus /></div>
+        ${gateError ? `<div class="auth-error">${esc(gateError)}</div>` : ''}
+        <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px;" ${gateBusy?'disabled':''}>${gateBusy?'Verificando…':'Entrar'}</button>
+      </form>
+    </div>
+  </div>`;
+  document.getElementById('gateForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const val = document.getElementById('gateKeyInput').value;
+    if(val === ACCESS_KEY){
+      localStorage.setItem(GATE_STORAGE_KEY, '1');
+      gateError = '';
+      continueBoot();
+    } else {
+      gateError = 'Chave incorreta.';
+      renderAccessGate();
+    }
+  });
+}
+
 /* ---------- Autenticação (nuvem) ---------- */
 let authMode = 'login';
 let authError = '';
@@ -2252,6 +2299,13 @@ function checkPin(){
 
 /* ---------- boot ---------- */
 async function boot(){
+  if(ACCESS_GATE_ENABLED && localStorage.getItem(GATE_STORAGE_KEY) !== '1'){
+    renderAccessGate();
+    return;
+  }
+  await continueBoot();
+}
+async function continueBoot(){
   if(CLOUD_ENABLED){
     const { data:{ session: s0 } } = await sb.auth.getSession();
     session = s0;
