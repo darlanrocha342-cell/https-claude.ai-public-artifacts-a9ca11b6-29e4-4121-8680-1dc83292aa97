@@ -848,10 +848,54 @@ function goalCard(g){
 }
 
 /* ---------- RELATÓRIOS ---------- */
+function weekdaySpend(days){
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-(days-1));
+  const cutoffISO = cutoff.toISOString().slice(0,10);
+  const labels = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const labelsLong = ['domingos','segundas-feiras','terças-feiras','quartas-feiras','quintas-feiras','sextas-feiras','sábados'];
+  const sums = [0,0,0,0,0,0,0];
+  state.transactions.forEach(t=>{
+    if(t.type==='expense' && t.date>=cutoffISO) sums[new Date(t.date+'T00:00:00').getDay()] += t.amount;
+  });
+  return { labels, labelsLong, sums };
+}
+function deltaBadge(current, previous, invert){
+  if(!previous) return '';
+  const pct = (current-previous)/Math.abs(previous)*100;
+  if(Math.abs(pct) < 1) return `<span class="badge neutral">≈ estável</span>`;
+  const up = pct >= 0;
+  const good = invert ? !up : up;
+  const arrow = up ? '▲' : '▼';
+  return `<span class="badge ${good?'good':'critical'}">${arrow} ${Math.abs(pct).toFixed(0)}% vs mês ant.</span>`;
+}
 function screenReports(){
+  const m = computeMetrics();
+  const prevList = txForMonth(-1);
+  const prevIncome = sumBy(prevList,'income');
+  const prevExpense = sumBy(prevList,'expense');
+  const prevSavings = prevIncome - prevExpense;
+  const wk = weekdaySpend(90);
+  const wkTotal = wk.sums.reduce((a,b)=>a+b,0);
+  const wkPeakIdx = wk.sums.indexOf(Math.max(...wk.sums));
+  const wkCaption = wkTotal>0
+    ? `Você costuma gastar mais aos <b>${wk.labelsLong[wkPeakIdx]}</b> — ${Math.round(wk.sums[wkPeakIdx]/wkTotal*100)}% do total nos últimos 90 dias.`
+    : 'Ainda não há dados suficientes dos últimos 90 dias para identificar um padrão.';
+
   return `
   <div class="card glow">
-    <div class="card-head" style="margin-bottom:20px;"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Receitas x Despesas — 6 meses</div></div>
+    <div class="card-row" style="margin-bottom:20px;">
+      <div class="card-head"><div class="ic">${iconSVG('piggy',16)}</div><div class="t">Economia mensal</div></div>
+      ${deltaBadge(m.savings, prevSavings, false)}
+    </div>
+    <div style="position:relative;"><canvas id="chartSavings"></canvas></div>
+    <div class="link-btn" data-action="toggle-table" data-t="savings" style="margin-top:10px;display:inline-block;">ver tabela</div>
+    <div id="table-savings" style="display:none;"></div>
+  </div>
+  <div class="card glow">
+    <div class="card-row" style="margin-bottom:20px;">
+      <div class="card-head"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Receitas x Despesas — 6 meses</div></div>
+      ${deltaBadge(m.expenses, prevExpense, true)}
+    </div>
     <div style="position:relative;"><canvas id="chartBars" height="180"></canvas></div>
     <div class="legend"><span class="legend-item"><span class="legend-dot" style="background:var(--c1)"></span>Receitas</span><span class="legend-item"><span class="legend-dot" style="background:var(--c2)"></span>Despesas</span></div>
     <div class="link-btn" data-action="toggle-table" data-t="bars" style="margin-top:10px;display:inline-block;">ver tabela</div>
@@ -863,6 +907,14 @@ function screenReports(){
     <div class="legend" id="donutLegend"></div>
     <div class="link-btn" data-action="toggle-table" data-t="donut" style="margin-top:10px;display:inline-block;">ver tabela</div>
     <div id="table-donut" style="display:none;"></div>
+  </div>
+  <div class="card glow">
+    <div class="card-head" style="margin-bottom:6px;"><div class="ic">${iconSVG('clock',16)}</div><div class="t">Gastos por dia da semana</div></div>
+    <div class="section-sub" style="margin:0 0 6px;">últimos 90 dias</div>
+    <div style="position:relative;"><canvas id="chartWeekday"></canvas></div>
+    <div class="insight" style="margin-top:14px;">${sevBadge('clock','neutral')}<div class="tx">${wkCaption}</div></div>
+    <div class="link-btn" data-action="toggle-table" data-t="weekday" style="margin-top:10px;display:inline-block;">ver tabela</div>
+    <div id="table-weekday" style="display:none;"></div>
   </div>`;
 }
 
@@ -943,6 +995,115 @@ function roundRectFull(ctx,x,y,w,h,r){
   ctx.arcTo(x,y+h,x,y,r);
   ctx.arcTo(x,y,x+w,y,r);
   ctx.closePath();
+}
+function roundRectBottom(ctx,x,y,w,h,r){
+  h = Math.max(h,1);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x+w, y);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x, y);
+  ctx.closePath();
+}
+function drawMiniTagBelow(ctx, cx, barBottomY, color, text){
+  ctx.font = '800 9.5px Inter';
+  const tagW = ctx.measureText(text).width + 10, tagH = 16;
+  const tagX = cx - tagW/2, tagY = barBottomY + 5;
+  roundRectFull(ctx, tagX, tagY, tagW, tagH, tagH/2);
+  ctx.fillStyle = 'rgba(6,10,18,.92)'; ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, cx, tagY + tagH/2 + 0.5);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawSavingsChart(){
+  const canvas = document.getElementById('chartSavings'); if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth, h = 170;
+  canvas.style.height = h+'px';
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const months = [-5,-4,-3,-2,-1,0];
+  const data = months.map(o=>{
+    const list = txForMonth(o);
+    const income = sumBy(list,'income') + (o===0 ? state.income.monthlyBase : 0);
+    const expense = sumBy(list,'expense');
+    return { label: monthLabel(o), savings: income - expense };
+  });
+  const maxAbs = Math.max(1, ...data.map(d=>Math.abs(d.savings)));
+  const padL=8, padB=22, padT=28;
+  const chartH = h - padB - padT;
+  const halfH = chartH/2;
+  const zeroY = padT + halfH;
+  const slotW = (w - padL*2) / data.length;
+  const barW = Math.min(22, slotW*0.42);
+
+  ctx.strokeStyle = 'rgba(148,180,214,.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL, zeroY+.5); ctx.lineTo(w-padL, zeroY+.5); ctx.stroke();
+
+  window._savingsPoints = [];
+  data.forEach((d,i)=>{
+    const cx = padL + slotW*i + slotW/2;
+    const barH = Math.abs(d.savings)/maxAbs * (halfH-6);
+    const positive = d.savings >= 0;
+    const color = positive ? getCss('--good-text') : getCss('--critical');
+    ctx.fillStyle = color;
+    if(positive) roundRectTop(ctx, cx-barW/2, zeroY-barH, barW, barH, 5);
+    else roundRectBottom(ctx, cx-barW/2, zeroY, barW, barH, 5);
+    ctx.fill();
+
+    if(i === data.length-1){
+      const txt = (positive?'+':'-') + formatCompact(Math.abs(d.savings));
+      if(positive) drawMiniTag(ctx, cx, zeroY-barH, color, txt);
+      else drawMiniTagBelow(ctx, cx, zeroY+barH, color, txt);
+    }
+
+    ctx.fillStyle = 'rgba(199,212,230,.6)'; ctx.font='700 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText(d.label, cx, h-6);
+    window._savingsPoints.push({x:cx, w:slotW, d});
+  });
+
+  renderTable('savings', ['Mês','Economia'], data.map(d=>[d.label, fmtBRL(d.savings)]));
+}
+
+function drawWeekdayChart(){
+  const canvas = document.getElementById('chartWeekday'); if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth, h = 160;
+  canvas.style.height = h+'px';
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const wk = weekdaySpend(90);
+  const maxV = Math.max(1, ...wk.sums);
+  const peakIdx = wk.sums.indexOf(Math.max(...wk.sums));
+  const padL=6, padB=20, padT=10;
+  const chartH = h-padB-padT;
+  const slotW = (w-padL*2)/7;
+  const barW = Math.min(26, slotW*0.5);
+
+  ctx.strokeStyle = 'rgba(148,180,214,.16)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,h-padB+.5); ctx.lineTo(w-padL,h-padB+.5); ctx.stroke();
+
+  window._weekdayPoints = [];
+  wk.labels.forEach((lbl,i)=>{
+    const cx = padL + slotW*i + slotW/2;
+    const bh = Math.max((wk.sums[i]/maxV)*chartH, wk.sums[i]>0?3:0);
+    const isPeak = i===peakIdx && wk.sums[i]>0;
+    ctx.fillStyle = isPeak ? getCss('--c8') : getCss('--brand-b');
+    roundRectTop(ctx, cx-barW/2, h-padB-bh, barW, bh, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(199,212,230,.6)'; ctx.font='700 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText(lbl, cx, h-5);
+    window._weekdayPoints.push({x:cx, w:slotW, label:lbl, val:wk.sums[i]});
+  });
+
+  renderTable('weekday', ['Dia','Total gasto'], wk.labels.map((l,i)=>[l, fmtBRL(wk.sums[i])]));
 }
 
 function drawAttentionChart(){
@@ -1182,11 +1343,49 @@ function screenSettings(){
    AÇÕES / EVENTOS
 =================================================================== */
 function afterRenderHooks(){
-  if(state.ui.tab==='reports'){ drawBarChart(); drawDonut(); attachChartTooltips(); }
+  if(state.ui.tab==='reports'){
+    drawSavingsChart(); drawBarChart(); drawDonut(); drawWeekdayChart();
+    attachChartTooltips(); attachSavingsTooltip(); attachWeekdayTooltip();
+  }
   if(state.ui.tab==='dashboard'){ drawAttentionChart(); attachAttentionTooltip(); }
   if(state.ui.tab==='settings'){
     document.getElementById('importFile').addEventListener('change', handleImport);
   }
+}
+
+function attachSavingsTooltip(){
+  const canvas = document.getElementById('chartSavings');
+  if(!canvas) return;
+  let tip;
+  canvas.addEventListener('mousemove', e=>{
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX-rect.left;
+    const pt = (window._savingsPoints||[]).find(p=>Math.abs(x-p.x)<p.w/2);
+    if(!tip){ tip=document.createElement('div'); tip.className='tooltip-box'; canvas.parentElement.appendChild(tip); }
+    if(pt){
+      tip.style.display='block';
+      tip.style.left = Math.max(0,pt.x-45)+'px'; tip.style.top = '2px';
+      tip.innerHTML = `<b>${pt.d.label}</b><br>Economia: ${fmtBRL(pt.d.savings)}`;
+    } else if(tip) tip.style.display='none';
+  });
+  canvas.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
+}
+function attachWeekdayTooltip(){
+  const canvas = document.getElementById('chartWeekday');
+  if(!canvas) return;
+  let tip;
+  canvas.addEventListener('mousemove', e=>{
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX-rect.left;
+    const pt = (window._weekdayPoints||[]).find(p=>Math.abs(x-p.x)<p.w/2);
+    if(!tip){ tip=document.createElement('div'); tip.className='tooltip-box'; canvas.parentElement.appendChild(tip); }
+    if(pt){
+      tip.style.display='block';
+      tip.style.left = Math.max(0,pt.x-45)+'px'; tip.style.top = '2px';
+      tip.innerHTML = `<b>${pt.label}</b><br>${fmtBRL(pt.val)}`;
+    } else if(tip) tip.style.display='none';
+  });
+  canvas.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
 }
 
 function attachAttentionTooltip(){
