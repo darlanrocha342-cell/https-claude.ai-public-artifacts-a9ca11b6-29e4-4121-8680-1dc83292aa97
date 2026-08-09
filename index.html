@@ -303,7 +303,7 @@ const ICONS = {
   food:   '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.4"/>',
   car:    '<path d="M4.5 16V11.5a1.6 1.6 0 0 1 1-1.5l1.3-3.4A1.8 1.8 0 0 1 8.5 5.5h7a1.8 1.8 0 0 1 1.7 1.1L18.5 10a1.6 1.6 0 0 1 1 1.5V16"/><line x1="3.5" y1="16" x2="20.5" y2="16"/><circle cx="7.5" cy="16.5" r="1.6"/><circle cx="16.5" cy="16.5" r="1.6"/>',
   film:   '<rect x="3.5" y="8" width="17" height="11" rx="1.5"/><path d="M3.5 8 6 4h3l-2.5 4z"/><path d="M9.5 8 12 4h3l-2.5 4z"/><path d="M15.5 8 18 4h1a1 1 0 0 1 1 1v3z"/>',
-  health: '<circle cx="12" cy="12" r="8"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  health: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/><polyline points="5 12.5 8.2 12.5 9.7 9.5 12 16 13.4 12.5 15.5 12.5"/>',
   book:   '<path d="M4 5.5A2 2 0 0 1 6 3.5h5v17H6a2 2 0 0 1-2-2z"/><path d="M20 5.5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 0 2-2z"/>',
   phone:  '<rect x="7" y="2.5" width="10" height="19" rx="2"/><line x1="10.5" y1="18" x2="13.5" y2="18"/>',
   repeat: '<path d="M17 2l4 4-4 4"/><path d="M21 6H8a5 5 0 0 0-5 5v1"/><path d="M7 22l-4-4 4-4"/><path d="M3 18h13a5 5 0 0 0 5-5v-1"/>',
@@ -328,6 +328,21 @@ const ICONS = {
 function iconSVG(key, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]||ICONS.box}</svg>`;
+}
+const STATUS_HEX = { good:'#3fe373', warning:'#fab219', serious:'#ec835a', critical:'#ef4a4a' };
+function progressRing(pct, size, strokeW, color, innerHTML){
+  const r = (size - strokeW) / 2, c = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - clamp(pct, 0, 1));
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 auto;">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg);position:absolute;inset:0;">
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="${strokeW}"/>
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round"
+        stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+        style="transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1);filter:drop-shadow(0 0 4px ${color}99);"/>
+    </svg>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">${innerHTML}</div>
+  </div>`;
 }
 
 const ENVELOPE_ICONS = ['home','food','car','film','health','book','phone','repeat','baby','paw','shirt','card','plane','briefcase','gift','box'];
@@ -743,12 +758,13 @@ function envelopeRowEditable(e){
   const spent = envelopeSpent(e.id,0);
   const pct = e.budget>0 ? spent/e.budget : 0;
   const status = statusForPct(pct);
+  const color = STATUS_HEX[status];
+  const ring = progressRing(pct, 46, 3.5, color, `<div style="color:${e.color};">${iconSVG(e.icon,18)}</div>`);
   return `<div class="env-item">
-    <div class="env-ic" style="background:${e.color}22;color:${e.color};box-shadow:0 0 14px ${e.color}40;">${iconSVG(e.icon,20)}</div>
+    ${ring}
     <div class="env-body" data-action="edit-envelope" data-id="${e.id}" style="cursor:pointer;">
       <div class="env-top"><span>${esc(e.name)}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
-      <div class="bar-track lg"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
-      <div class="env-meta"><span>${money(spent)} de ${money(e.budget)}</span><span>${(pct*100).toFixed(0)}%</span></div>
+      <div class="env-meta" style="margin-top:3px;"><span>${money(spent)} de ${money(e.budget)}</span><span style="font-weight:800;color:${color}">${Math.round(pct*100)}%</span></div>
     </div>
   </div>`;
 }
