@@ -2306,6 +2306,7 @@ async function boot(){
   await continueBoot();
 }
 async function continueBoot(){
+  document.querySelector('.tabbar').style.display = '';
   if(CLOUD_ENABLED){
     const { data:{ session: s0 } } = await sb.auth.getSession();
     session = s0;
