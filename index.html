@@ -620,7 +620,7 @@ function topbarHTML(){
 /* ---------- DASHBOARD ---------- */
 function screenDashboard(){
   const m = computeMetrics();
-  const lvl = levelInfo();
+  const totalDebt = state.debts.reduce((s,d)=>s+d.balance,0);
   const insights = computeInsights();
   const recentTx = [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).slice(0,5);
   const topEnvelopes = [...state.envelopes].sort((a,b)=> (envelopeSpent(b.id,0)/(b.budget||1)) - (envelopeSpent(a.id,0)/(a.budget||1)) ).slice(0,4);
@@ -653,10 +653,11 @@ function screenDashboard(){
         <div class="val" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div>
         <div class="sub2">da renda</div>
       </div>
-      <div class="dstat">
-        <div class="lbl">${iconSVG('shield',12)}Nível</div>
-        <div class="val">Lv.${lvl.level}</div>
-        <div class="sub2">${lvl.xp} XP</div>
+      <div class="dstat" data-action="goto" data-tab="debts" style="cursor:pointer;">
+        <div class="lbl">${iconSVG('card',12)}Dívidas</div>
+        ${totalDebt>0
+          ? `<div class="val" style="color:var(--critical)">${money(totalDebt)}</div><div class="sub2">${state.debts.length} em aberto</div>`
+          : `<div class="val" style="color:var(--good-text)">Livre</div><div class="sub2">sem dívidas</div>`}
       </div>
     </div>
   </div>
