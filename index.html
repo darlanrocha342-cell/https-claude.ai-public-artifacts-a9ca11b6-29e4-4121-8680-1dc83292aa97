@@ -135,7 +135,8 @@ main{ padding: 6px 18px 24px; }
 /* envelopes */
 .env-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border-soft); }
 .env-item:last-child{ border-bottom:none; }
-.env-ic{ width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:18px; flex:0 0 auto; }
+.env-ic{ width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.goal-ic{ width:44px; height:44px; border-radius:13px; background: var(--brand-grad-soft); color:#c9c1ff; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .env-body{ flex:1; min-width:0; }
 .env-top{ display:flex; justify-content:space-between; font-size:13.5px; font-weight:700; margin-bottom:6px; gap:8px; }
 .env-top .pct{ font-weight:700; font-size:12px; }
@@ -225,8 +226,8 @@ main{ padding: 6px 18px 24px; }
 .seg button{ flex:1; border:none; background:none; color: var(--text-dim); padding:9px 6px; border-radius:9px; font-weight:700; font-size:12.5px; cursor:pointer; }
 .seg button.active{ background: var(--brand-grad); color:#0a0a0c; }
 .icon-pick{ display:flex; flex-wrap:wrap; gap:8px; }
-.icon-pick button{ width:40px; height:40px; border-radius:11px; border:1px solid var(--border); background: var(--surface-2); font-size:17px; cursor:pointer; }
-.icon-pick button.active{ border-color: var(--brand-a); background: rgba(139,123,255,.18); }
+.icon-pick button{ width:40px; height:40px; border-radius:11px; border:1px solid var(--border); background: var(--surface-2); color: var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.icon-pick button.active{ border-color: var(--brand-a); background: rgba(139,123,255,.18); color:#c9c1ff; }
 .color-pick{ display:flex; flex-wrap:wrap; gap:8px; }
 .color-pick button{ width:28px; height:28px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
 .color-pick button.active{ border-color:#fff; }
@@ -282,10 +283,44 @@ const STORAGE_KEY = 'zenite_state_v1';
 const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const todayISO = () => new Date().toISOString().slice(0,10);
 
-const ENVELOPE_ICONS = ['🏠','🍽️','🚗','🎬','💊','📚','📱','👶','🐾','👕','💳','✈️','💼','🎁','📦'];
+/* Conjunto de ícones de linha, autorais — substitui emojis genéricos do sistema
+   por um único estilo consistente (mesmo espírito da marca ÓRBITA). */
+const ICONS = {
+  home:   '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/>',
+  food:   '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.4"/>',
+  car:    '<path d="M4.5 16V11.5a1.6 1.6 0 0 1 1-1.5l1.3-3.4A1.8 1.8 0 0 1 8.5 5.5h7a1.8 1.8 0 0 1 1.7 1.1L18.5 10a1.6 1.6 0 0 1 1 1.5V16"/><line x1="3.5" y1="16" x2="20.5" y2="16"/><circle cx="7.5" cy="16.5" r="1.6"/><circle cx="16.5" cy="16.5" r="1.6"/>',
+  film:   '<rect x="3.5" y="8" width="17" height="11" rx="1.5"/><path d="M3.5 8 6 4h3l-2.5 4z"/><path d="M9.5 8 12 4h3l-2.5 4z"/><path d="M15.5 8 18 4h1a1 1 0 0 1 1 1v3z"/>',
+  health: '<circle cx="12" cy="12" r="8"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  book:   '<path d="M4 5.5A2 2 0 0 1 6 3.5h5v17H6a2 2 0 0 1-2-2z"/><path d="M20 5.5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 0 2-2z"/>',
+  phone:  '<rect x="7" y="2.5" width="10" height="19" rx="2"/><line x1="10.5" y1="18" x2="13.5" y2="18"/>',
+  repeat: '<path d="M17 2l4 4-4 4"/><path d="M21 6H8a5 5 0 0 0-5 5v1"/><path d="M7 22l-4-4 4-4"/><path d="M3 18h13a5 5 0 0 0 5-5v-1"/>',
+  baby:   '<rect x="9" y="9.5" width="6" height="10.5" rx="2"/><rect x="10.3" y="5.5" width="3.4" height="4" rx="1"/><circle cx="12" cy="4.3" r="1.1"/><line x1="9" y1="14.5" x2="15" y2="14.5"/>',
+  paw:    '<circle cx="12" cy="15.2" r="3.3"/><circle cx="6" cy="10" r="1.7"/><circle cx="9.8" cy="6.2" r="1.7"/><circle cx="14.2" cy="6.2" r="1.7"/><circle cx="18" cy="10" r="1.7"/>',
+  shirt:  '<circle cx="12" cy="4.2" r="1.3"/><line x1="12" y1="5.5" x2="12" y2="7.5"/><path d="M12 7.5 3 14.5a1.2 1.2 0 0 0 .7 2.1h16.6a1.2 1.2 0 0 0 .7-2.1z"/>',
+  card:   '<rect x="2.5" y="5.5" width="19" height="13" rx="2"/><line x1="2.5" y1="10" x2="21.5" y2="10"/><line x1="5.5" y1="15" x2="9.5" y2="15"/>',
+  plane:  '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
+  briefcase: '<rect x="2.5" y="7.5" width="19" height="12" rx="2"/><path d="M8.5 7.5v-2a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/><line x1="2.5" y1="13" x2="21.5" y2="13"/>',
+  gift:   '<rect x="3.5" y="9" width="17" height="11" rx="1"/><line x1="3.5" y1="13.5" x2="20.5" y2="13.5"/><line x1="12" y1="9" x2="12" y2="20"/><path d="M12 9C9 9 8 7.5 8 6a2 2 0 0 1 4 0"/><path d="M12 9c3 0 4-1.5 4-3a2 2 0 0 0-4 0"/>',
+  box:    '<path d="M3 8 12 4l9 4-9 4z"/><path d="M3 8v9l9 4 9-4V8"/><line x1="12" y1="12" x2="12" y2="21"/>',
+  ring:   '<circle cx="12" cy="15" r="6"/><path d="M9 8 12 3 15 8"/>',
+  shield: '<path d="M12 3 5 6v5.5c0 4.6 3 8 7 9.5 4-1.5 7-4.9 7-9.5V6z"/>',
+  palm:   '<path d="M12 21v-7"/><line x1="12" y1="14" x2="4" y2="10"/><line x1="12" y1="14" x2="7" y2="6"/><line x1="12" y1="14" x2="12" y2="4"/><line x1="12" y1="14" x2="17" y2="6"/><line x1="12" y1="14" x2="20" y2="10"/>',
+  laptop: '<rect x="4" y="4.5" width="16" height="10.5" rx="1.3"/><path d="M1.5 19.5h21l-1.5-3h-18z"/>',
+  building: '<rect x="5" y="3" width="14" height="18" rx="1"/><line x1="8.5" y1="7" x2="8.5" y2="9"/><line x1="12" y1="7" x2="12" y2="9"/><line x1="15.5" y1="7" x2="15.5" y2="9"/><line x1="8.5" y1="11.5" x2="8.5" y2="13.5"/><line x1="12" y1="11.5" x2="12" y2="13.5"/><line x1="15.5" y1="11.5" x2="15.5" y2="13.5"/><line x1="9.5" y1="21" x2="9.5" y2="17"/><line x1="14.5" y1="21" x2="14.5" y2="17"/>',
+  chart:  '<polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/>',
+  piggy:  '<path d="M4.5 12.5a6.5 6.5 0 0 1 6.5-6.5h3a6.5 6.5 0 0 1 5.7 3.4l1.8.1a1 1 0 0 1 .8 1.5l-1.3 2v3a1 1 0 0 1-1 1h-1.5v1.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V17h-4v1.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V16a5 5 0 0 1-2.5-3.5z"/><line x1="9.5" y1="9.5" x2="7.5" y2="7.7"/><circle cx="16" cy="10.5" r=".6" fill="currentColor" stroke="none"/>',
+  income: '<line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10 12 15 17 10"/><line x1="5" y1="19.5" x2="19" y2="19.5"/>',
+  flag:   '<line x1="5" y1="3" x2="5" y2="21"/><path d="M5 4h13l-3 4 3 4H5"/>',
+};
+function iconSVG(key, size){
+  size = size || 20;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]||ICONS.box}</svg>`;
+}
+
+const ENVELOPE_ICONS = ['home','food','car','film','health','book','phone','repeat','baby','paw','shirt','card','plane','briefcase','gift','box'];
 const ENVELOPE_COLORS = ['#3987e5','#d95926','#1baf7a','#c98500','#d55181','#2fbf4f','#9085e9','#e66767'];
-const GOAL_ICONS = ['🏡','🚘','✈️','💍','🛡️','🌴','💻','📱','🏢','📈','🎓','🐷'];
-const EXPENSE_QUICK_ICONS = {'Moradia':'🏠','Alimentação':'🍽️','Transporte':'🚗','Lazer':'🎬','Saúde':'💊','Educação':'📚','Assinaturas':'📱','Filhos':'👶','Pets':'🐾','Roupas':'👕','Cartão':'💳','Outros':'📦'};
+const GOAL_ICONS = ['home','car','plane','ring','shield','palm','laptop','phone','building','chart','book','piggy'];
+const EXPENSE_QUICK_ICONS = {'Moradia':'home','Alimentação':'food','Transporte':'car','Lazer':'film','Saúde':'health','Educação':'book','Assinaturas':'repeat','Filhos':'baby','Pets':'paw','Roupas':'shirt','Cartão':'card','Outros':'box'};
 
 function defaultState(){
   return {
@@ -610,7 +645,7 @@ function goalMiniCard(g){
   return `<div class="card" data-action="open-goal" data-id="${g.id}" style="cursor:pointer;">
     <div class="card-row"><div class="card-title" style="margin:0;">META PRINCIPAL</div><span class="badge neutral">${(pct*100).toFixed(0)}%</span></div>
     <div style="display:flex;align-items:center;gap:12px;margin:8px 0 10px;">
-      <div style="font-size:26px;">${g.icon}</div>
+      <div class="goal-ic">${iconSVG(g.icon,22)}</div>
       <div style="flex:1;">
         <div style="font-weight:800;font-size:15px;">${esc(g.name)}</div>
         <div style="font-size:12px;color:var(--text-mute);">${money(g.saved)} de ${money(g.target)}</div>
@@ -626,7 +661,7 @@ function envelopeRow(e){
   const pct = e.budget>0 ? spent/e.budget : 0;
   const status = statusForPct(pct);
   return `<div class="env-item" data-action="goto" data-tab="budget">
-    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${e.icon}</div>
+    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${iconSVG(e.icon,20)}</div>
     <div class="env-body">
       <div class="env-top"><span>${esc(e.name)}</span><span class="pct" style="color:var(--${status==='good'?'good-text':status})">${(pct*100).toFixed(0)}%</span></div>
       <div class="bar-track"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
@@ -637,7 +672,7 @@ function envelopeRow(e){
 
 function txRow(t){
   const env = state.envelopes.find(e=>e.id===t.envelopeId);
-  const ic = t.type==='income' ? '↓' : (env? env.icon : (EXPENSE_QUICK_ICONS[t.category]||'📦'));
+  const ic = t.type==='income' ? iconSVG('income',18) : iconSVG(env ? env.icon : (EXPENSE_QUICK_ICONS[t.category]||'box'), 18);
   return `<div class="tx-item" data-action="edit-tx" data-id="${t.id}">
     <div class="tx-ic" style="${t.type==='income'?'background:rgba(31,211,90,.15);color:var(--good-text);':''}">${ic}</div>
     <div class="tx-body"><div class="tx-name">${esc(t.note || t.category)}</div><div class="tx-meta">${env?esc(env.name)+' · ':''}${fmtDate(t.date)}</div></div>
@@ -686,7 +721,7 @@ function envelopeRowEditable(e){
   const pct = e.budget>0 ? spent/e.budget : 0;
   const status = statusForPct(pct);
   return `<div class="env-item">
-    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${e.icon}</div>
+    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${iconSVG(e.icon,20)}</div>
     <div class="env-body" data-action="edit-envelope" data-id="${e.id}" style="cursor:pointer;">
       <div class="env-top"><span>${esc(e.name)}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
       <div class="bar-track"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
@@ -714,7 +749,7 @@ function goalCard(g){
   }
   return `<div class="card">
     <div class="card-row">
-      <div style="display:flex;align-items:center;gap:10px;"><div style="font-size:24px;">${g.icon}</div><div style="font-weight:800;font-size:15.5px;">${esc(g.name)}</div></div>
+      <div style="display:flex;align-items:center;gap:10px;"><div class="goal-ic">${iconSVG(g.icon,20)}</div><div style="font-weight:800;font-size:15.5px;">${esc(g.name)}</div></div>
       <button class="icon-btn" data-action="edit-goal" data-id="${g.id}" style="width:32px;height:32px;">⋯</button>
     </div>
     <div style="margin:10px 0 6px;font-size:13px;color:var(--text-dim);">${money(g.saved)} <span style="color:var(--text-mute);">de ${fmtBRL(g.target)}</span> · <b style="color:var(--text)">${(pct*100).toFixed(0)}%</b></div>
@@ -1035,7 +1070,7 @@ function openTxForm(existing){
     <div class="field" id="envFieldWrap" style="display:${t.type==='expense'?'block':'none'}"><label>Categoria / Envelope</label>
       <select id="txEnvelope">
         <option value="">Sem categoria</option>
-        ${state.envelopes.map(e=>`<option value="${e.id}" ${t.envelopeId===e.id?'selected':''}>${e.icon} ${esc(e.name)}</option>`).join('')}
+        ${state.envelopes.map(e=>`<option value="${e.id}" ${t.envelopeId===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}
       </select>
     </div>
     <div class="field"><label>Data</label><input required type="date" id="txDate" value="${t.date}" /></div>
@@ -1054,7 +1089,7 @@ function openEnvelopeForm(existing){
     <div class="field"><label>Nome</label><input required type="text" id="envName" value="${esc(e.name)}" placeholder="Ex: Alimentação" /></div>
     <div class="field"><label>Orçamento mensal (R$)</label><input required type="number" step="0.01" inputmode="decimal" id="envBudget" value="${e.budget}" /></div>
     <div class="field"><label>Ícone</label><div class="icon-pick" id="envIconPick">
-      ${ENVELOPE_ICONS.map(ic=>`<button type="button" class="${e.icon===ic?'active':''}" data-ic="${ic}">${ic}</button>`).join('')}
+      ${ENVELOPE_ICONS.map(ic=>`<button type="button" class="${e.icon===ic?'active':''}" data-ic="${ic}">${iconSVG(ic,19)}</button>`).join('')}
     </div></div>
     <div class="field"><label>Cor</label><div class="color-pick" id="envColorPick">
       ${ENVELOPE_COLORS.map(c=>`<button type="button" data-c="${c}" class="${e.color===c?'active':''}" style="background:${c}"></button>`).join('')}
@@ -1079,7 +1114,7 @@ function openGoalForm(existing){
     </div>
     <div class="field"><label>Prazo</label><input type="date" id="goalDeadline" value="${g.deadline}" /></div>
     <div class="field"><label>Ícone</label><div class="icon-pick" id="goalIconPick">
-      ${GOAL_ICONS.map(ic=>`<button type="button" class="${g.icon===ic?'active':''}" data-ic="${ic}">${ic}</button>`).join('')}
+      ${GOAL_ICONS.map(ic=>`<button type="button" class="${g.icon===ic?'active':''}" data-ic="${ic}">${iconSVG(ic,19)}</button>`).join('')}
     </div></div>
     <input type="hidden" id="goalIcon" value="${g.icon}" />
     <button class="btn btn-primary btn-block" type="submit">${isEdit?'Salvar':'Criar meta'}</button>
@@ -1129,13 +1164,13 @@ function openOnboarding(){
 
 function generateDefaultEnvelopes(income){
   const plan = [
-    {name:'Moradia', icon:'🏠', pct:.30},
-    {name:'Alimentação', icon:'🍽️', pct:.15},
-    {name:'Transporte', icon:'🚗', pct:.10},
-    {name:'Lazer', icon:'🎬', pct:.08},
-    {name:'Saúde', icon:'💊', pct:.06},
-    {name:'Assinaturas', icon:'📱', pct:.04},
-    {name:'Outros', icon:'📦', pct:.12},
+    {name:'Moradia', icon:'home', pct:.30},
+    {name:'Alimentação', icon:'food', pct:.15},
+    {name:'Transporte', icon:'car', pct:.10},
+    {name:'Lazer', icon:'film', pct:.08},
+    {name:'Saúde', icon:'health', pct:.06},
+    {name:'Assinaturas', icon:'repeat', pct:.04},
+    {name:'Outros', icon:'box', pct:.12},
   ];
   return plan.map((p,i)=>({ id: uid(), name:p.name, icon:p.icon, budget: Math.round(income*p.pct), color: ENVELOPE_COLORS[i%ENVELOPE_COLORS.length] }));
 }
