@@ -132,6 +132,15 @@ main{ padding: 6px 18px 24px; }
 .divider-stats .dstat .sub2{ font-size:9.5px; color:var(--text-mute); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .divider-stats .dstat .lbl svg{ flex:0 0 auto; }
 
+/* linha secundária, mais discreta, separada por uma linha fina */
+.legend-row{ display:flex; margin-top:14px; padding-top:14px; border-top:1px solid rgba(148,180,214,.14); }
+.legend-row .lstat{ flex:1; padding:0 10px; min-width:0; }
+.legend-row .lstat:first-child{ padding-left:0; }
+.legend-row .lstat:not(:first-child){ border-left:1px solid rgba(148,180,214,.14); }
+.legend-row .lstat .lbl{ display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-mute); font-weight:700; text-transform:uppercase; letter-spacing:.02em; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.legend-row .lstat .val{ font-size:13px; font-weight:800; line-height:1.25; word-break:break-word; }
+.legend-row .lstat .sub2{ font-size:9px; color:var(--text-mute); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
 /* stat grid */
 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 
@@ -169,7 +178,7 @@ main{ padding: 6px 18px 24px; }
 
 /* insight */
 .insight{ display:flex; gap:12px; padding:14px; border-radius: var(--radius-md); background: var(--brand-grad-soft); border:1px solid rgba(139,123,255,.25); }
-.insight .ic{ font-size:19px; flex:0 0 auto; }
+.insight .ic{ width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .insight .tx{ font-size:13px; line-height:1.45; color:#e9e7ff; }
 .insight .tx b{ color:#fff; }
 
@@ -324,12 +333,20 @@ const ICONS = {
   piggy:  '<path d="M4.5 12.5a6.5 6.5 0 0 1 6.5-6.5h3a6.5 6.5 0 0 1 5.7 3.4l1.8.1a1 1 0 0 1 .8 1.5l-1.3 2v3a1 1 0 0 1-1 1h-1.5v1.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V17h-4v1.5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V16a5 5 0 0 1-2.5-3.5z"/><line x1="9.5" y1="9.5" x2="7.5" y2="7.7"/><circle cx="16" cy="10.5" r=".6" fill="currentColor" stroke="none"/>',
   income: '<line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10 12 15 17 10"/><line x1="5" y1="19.5" x2="19" y2="19.5"/>',
   flag:   '<line x1="5" y1="3" x2="5" y2="21"/><path d="M5 4h13l-3 4 3 4H5"/>',
+  alert:  '<circle cx="12" cy="12" r="8.5"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.3" r=".9" fill="currentColor" stroke="none"/>',
+  bulb:   '<path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2.2h5c.1-1 .5-1.7 1.1-2.2A6 6 0 0 0 12 3z"/><line x1="9.5" y1="18" x2="14.5" y2="18"/><line x1="10.3" y1="21" x2="13.7" y2="21"/>',
+  clock:  '<circle cx="12" cy="12" r="8.5"/><polyline points="12 7.5 12 12 15.5 13.8"/>',
 };
 function iconSVG(key, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]||ICONS.box}</svg>`;
 }
 const STATUS_HEX = { good:'#3fe373', warning:'#fab219', serious:'#ec835a', critical:'#ef4a4a' };
+const SEV_HEX = { good:'#3fe373', warning:'#fab219', critical:'#ef4a4a', neutral:'#22d3ee' };
+function sevBadge(icKey, sev){
+  const c = SEV_HEX[sev] || SEV_HEX.neutral;
+  return `<div class="ic" style="background:${c}22;color:${c};border:1px solid ${c}55;">${iconSVG(icKey,16)}</div>`;
+}
 function progressRing(pct, size, strokeW, color, innerHTML){
   const r = (size - strokeW) / 2, c = size / 2;
   const circumference = 2 * Math.PI * r;
@@ -477,11 +494,11 @@ function computeInsights(){
   const m = computeMetrics();
 
   if(m.income>0 && m.savings<0){
-    insights.push({ic:'⚠️', text:`Você está gastando <b>${fmtBRL(Math.abs(m.savings))}</b> a mais do que ganha este mês. Vamos revisar seu orçamento antes que isso vire dívida.`});
+    insights.push({icKey:'alert', sev:'critical', text:`Você está gastando <b>${fmtBRL(Math.abs(m.savings))}</b> a mais do que ganha este mês. Vamos revisar seu orçamento antes que isso vire dívida.`});
   } else if(m.income>0){
-    if(m.savingsRate>=0.2) insights.push({ic:'🏆', text:`Disciplina impecável: você está economizando <b>${(m.savingsRate*100).toFixed(0)}%</b> da sua renda este mês.`});
-    else if(m.savingsRate>=0.1) insights.push({ic:'👍', text:`Boa taxa de economia (<b>${(m.savingsRate*100).toFixed(0)}%</b>). Tente chegar a 20% reduzindo uma categoria variável.`});
-    else insights.push({ic:'💡', text:`Sua taxa de economia está em <b>${(m.savingsRate*100).toFixed(0)}%</b>. Pequenos cortes em lazer ou assinaturas já fazem diferença.`});
+    if(m.savingsRate>=0.2) insights.push({icKey:'piggy', sev:'good', text:`Disciplina impecável: você está economizando <b>${(m.savingsRate*100).toFixed(0)}%</b> da sua renda este mês.`});
+    else if(m.savingsRate>=0.1) insights.push({icKey:'piggy', sev:'good', text:`Boa taxa de economia (<b>${(m.savingsRate*100).toFixed(0)}%</b>). Tente chegar a 20% reduzindo uma categoria variável.`});
+    else insights.push({icKey:'bulb', sev:'neutral', text:`Sua taxa de economia está em <b>${(m.savingsRate*100).toFixed(0)}%</b>. Pequenos cortes em lazer ou assinaturas já fazem diferença.`});
   }
 
   state.envelopes.forEach(env=>{
@@ -494,13 +511,15 @@ function computeInsights(){
       if(avg>0 && projected > avg*1.2){
         const pctAbove = Math.round((projected/avg-1)*100);
         const yearlyIfReduced = Math.round(projected*0.15*12);
-        insights.push({ic:'📊', text:`Gasto com <b>${esc(env.name)}</b> está ${pctAbove}% acima da sua média. Reduzindo 15%, você economizaria cerca de <b>${fmtBRL(yearlyIfReduced)}</b>/ano.`});
+        insights.push({icKey:'chart', sev:'warning', text:`Gasto com <b>${esc(env.name)}</b> está ${pctAbove}% acima da sua média. Reduzindo 15%, você economizaria cerca de <b>${fmtBRL(yearlyIfReduced)}</b>/ano.`});
       }
     }
     if(env.budget>0){
       const pct = spentNow/env.budget;
-      if(pct>=0.9 && pct<1) insights.push({ic:'🟠', text:`Orçamento de <b>${esc(env.name)}</b> já está em ${(pct*100).toFixed(0)}%. Faltam ${fmtBRL(Math.max(0,env.budget-spentNow))} até o limite.`});
-      else if(pct>=1) insights.push({ic:'🔴', text:`Você estourou o orçamento de <b>${esc(env.name)}</b> em ${fmtBRL(spentNow-env.budget)}.`});
+      const overBy = spentNow - env.budget;
+      if(pct>=0.9 && pct<1) insights.push({icKey:'alert', sev:'warning', text:`Orçamento de <b>${esc(env.name)}</b> já está em ${(pct*100).toFixed(0)}%. Faltam ${fmtBRL(Math.max(0,env.budget-spentNow))} até o limite.`});
+      else if(pct>=1 && overBy<=0.005) insights.push({icKey:'alert', sev:'warning', text:`Você atingiu exatamente o limite do orçamento de <b>${esc(env.name)}</b>.`});
+      else if(overBy>0.005) insights.push({icKey:'alert', sev:'critical', text:`Você estourou o orçamento de <b>${esc(env.name)}</b> em ${fmtBRL(overBy)}.`});
     }
   });
 
@@ -510,15 +529,15 @@ function computeInsights(){
     if(needed>0){
       if(avg >= needed*1.15){
         const monthsAhead = Math.max(1, Math.round((avg/needed - 1) * monthsBetween(todayISO(), g.deadline)));
-        insights.push({ic:'🚀', text:`Meta <b>${esc(g.name)}</b> está adiantada! No ritmo atual, você chega até ${monthsAhead} mês(es) antes do prazo.`});
+        insights.push({icKey:'chart', sev:'good', text:`Meta <b>${esc(g.name)}</b> está adiantada! No ritmo atual, você chega até ${monthsAhead} mês(es) antes do prazo.`});
       } else if(avg>0 && avg < needed*0.7){
-        insights.push({ic:'⏳', text:`Meta <b>${esc(g.name)}</b> está atrasada. Você precisa aportar em média ${fmtBRL(needed)}/mês para chegar no prazo.`});
+        insights.push({icKey:'clock', sev:'warning', text:`Meta <b>${esc(g.name)}</b> está atrasada. Você precisa aportar em média ${fmtBRL(needed)}/mês para chegar no prazo.`});
       }
     }
   });
 
   if(!insights.length){
-    insights.push({ic:'✨', text:'Continue registrando seus lançamentos — quanto mais dados, mais precisos ficam os seus insights.'});
+    insights.push({icKey:'bulb', sev:'neutral', text:'Continue registrando seus lançamentos — quanto mais dados, mais precisos ficam os seus insights.'});
   }
   return insights.slice(0,4);
 }
@@ -638,22 +657,18 @@ function screenDashboard(){
       <div class="dstat"><div class="lbl"><span class="dot" style="background:var(--brand-b)"></span>Saldo</div><div class="val" style="color:${m.savings>=0?'#fff':'var(--critical)'}">${money(m.savings)}</div></div>
       <div class="dstat"><div class="lbl"><span class="dot" style="background:var(--c8)"></span>Despesas</div><div class="val" style="color:var(--c8)">${money(m.expenses)}</div></div>
     </div>
-  </div>
-
-  <div class="card glow">
-    <div class="card-head" style="margin-bottom:14px;"><div class="ic">${iconSVG('shield',16)}</div><div class="t">Resumo rápido</div></div>
-    <div class="divider-stats">
-      <div class="dstat">
+    <div class="legend-row">
+      <div class="lstat">
         <div class="lbl">${iconSVG('income',12)}Por dia</div>
         <div class="val">${money(m.availableToday)}</div>
         <div class="sub2">${m.daysLeft} dias restantes</div>
       </div>
-      <div class="dstat">
+      <div class="lstat">
         <div class="lbl">${iconSVG('piggy',12)}Economia</div>
         <div class="val" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div>
         <div class="sub2">da renda</div>
       </div>
-      <div class="dstat" data-action="goto" data-tab="debts" style="cursor:pointer;">
+      <div class="lstat" data-action="goto" data-tab="debts" style="cursor:pointer;">
         <div class="lbl">${iconSVG('card',12)}Dívidas</div>
         ${totalDebt>0
           ? `<div class="val" style="color:var(--critical)">${money(totalDebt)}</div><div class="sub2">${state.debts.length} em aberto</div>`
@@ -662,7 +677,7 @@ function screenDashboard(){
     </div>
   </div>
 
-  ${insights.map(i=>`<div class="insight"><div class="ic">${i.ic}</div><div class="tx">${i.text}</div></div>`).join('')}
+  ${insights.map(i=>`<div class="insight">${sevBadge(i.icKey,i.sev)}<div class="tx">${i.text}</div></div>`).join('')}
 
   ${primaryGoal ? goalMiniCard(primaryGoal) : `<div class="card"><div class="empty" style="padding:20px 10px;"><div class="ic">◎</div><div class="t">Crie sua primeira meta financeira</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-goal">Criar meta</button></div></div>`}
 
