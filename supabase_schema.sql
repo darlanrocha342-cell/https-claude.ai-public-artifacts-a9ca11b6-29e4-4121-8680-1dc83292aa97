@@ -208,9 +208,20 @@ create table if not exists debts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  category text not null default 'outros', -- financiamento | emprestimo | cartao | parcelado | consorcio | outros
+  institution text not null default '',
+  original_amount numeric(14,2) not null default 0,
   balance numeric(14,2) not null default 0,
   rate numeric(6,3) not null default 0, -- juros ao mês, em %
-  min_payment numeric(14,2) not null default 0,
+  contract_date date,
+  first_due_date date,
+  due_day smallint,
+  total_installments integer not null default 1,
+  paid_installments integer not null default 0,
+  installment_amount numeric(14,2) not null default 0,
+  min_payment numeric(14,2) not null default 0, -- mantido por compatibilidade (= installment_amount)
+  auto_debit boolean not null default false,
+  already_debited boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -231,6 +242,26 @@ create trigger trg_debts_updated_at
   for each row execute function set_updated_at();
 
 create index if not exists idx_debts_user_id on debts(user_id);
+
+-- =====================================================================
+-- MIGRAÇÃO — já rodou o schema antes (versão anterior da tabela debts)?
+-- Rode só o bloco abaixo, é seguro executar mais de uma vez (idempotente).
+-- Se está criando o projeto do zero, o "create table if not exists" acima
+-- já cria a tabela completa e você pode ignorar este bloco.
+-- =====================================================================
+alter table debts add column if not exists category text not null default 'outros';
+alter table debts add column if not exists institution text not null default '';
+alter table debts add column if not exists original_amount numeric(14,2) not null default 0;
+alter table debts add column if not exists contract_date date;
+alter table debts add column if not exists first_due_date date;
+alter table debts add column if not exists due_day smallint;
+alter table debts add column if not exists total_installments integer not null default 1;
+alter table debts add column if not exists paid_installments integer not null default 0;
+alter table debts add column if not exists installment_amount numeric(14,2) not null default 0;
+alter table debts add column if not exists already_debited boolean not null default true;
+alter table debts add column if not exists auto_debit boolean not null default false;
+update debts set installment_amount = min_payment where installment_amount = 0 and min_payment > 0;
+update debts set original_amount = balance where original_amount = 0 and balance > 0;
 
 -- =====================================================================
 -- Fim do schema. Próximo passo (fora deste arquivo): configurar o

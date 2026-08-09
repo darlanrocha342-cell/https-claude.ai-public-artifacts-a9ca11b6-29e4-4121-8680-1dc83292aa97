@@ -196,6 +196,21 @@ main{ padding: 6px 18px 24px; }
 .bar-fill.critical{ background: linear-gradient(90deg,#ef4a4a,#d03b3b); box-shadow: 0 0 12px rgba(239,74,74,.55); }
 .bar-fill.brand{ background: var(--brand-grad); box-shadow: 0 0 10px rgba(90,166,255,.4); }
 
+/* stat pills */
+.hero-pill{ background: var(--surface-2); border:1px solid var(--border-soft); border-radius:12px; padding:10px 12px; }
+.hero-pill .lbl{ font-size:9.5px; font-weight:800; letter-spacing:.04em; color:var(--text-mute); text-transform:uppercase; margin-bottom:4px; }
+.hero-pill .val{ font-size:15px; font-weight:800; }
+
+/* toggle switch */
+.toggle-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; }
+.toggle-row .lbl{ font-size:13px; font-weight:700; }
+.switch{ position:relative; display:inline-block; width:44px; height:26px; flex:0 0 auto; }
+.switch input{ opacity:0; width:0; height:0; position:absolute; }
+.switch .track{ position:absolute; inset:0; background:var(--surface-2); border:1px solid var(--border); border-radius:99px; transition:.2s; cursor:pointer; }
+.switch .track:before{ content:""; position:absolute; width:18px; height:18px; left:3px; top:2.5px; background:#fff; border-radius:50%; transition:.2s; }
+.switch input:checked + .track{ background:var(--brand-grad); border-color:transparent; }
+.switch input:checked + .track:before{ transform:translateX(18px); }
+
 /* envelopes */
 .env-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border-soft); }
 .env-item:last-child{ border-bottom:none; }
@@ -523,7 +538,9 @@ function load(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return Object.assign(defaultState(), parsed);
+    const s = Object.assign(defaultState(), parsed);
+    s.debts = (s.debts||[]).map(debtNormalize);
+    return s;
   }catch(e){ return defaultState(); }
 }
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -545,7 +562,15 @@ function stateFromCloud(profile, envelopes, transactions, goals, contributions, 
   const contribByGoal = {};
   contributions.forEach(c=>{ (contribByGoal[c.goal_id] = contribByGoal[c.goal_id]||[]).push({ date:c.date, amount:Number(c.amount)||0 }); });
   s.goals = goals.map(g=>({ id:g.id, name:g.name, icon:g.icon, target:Number(g.target)||0, saved:Number(g.saved)||0, deadline:g.deadline||'', contributions: contribByGoal[g.id]||[] }));
-  s.debts = debts.map(d=>({ id:d.id, name:d.name, balance:Number(d.balance)||0, rate:Number(d.rate)||0, minPayment:Number(d.min_payment)||0 }));
+  s.debts = debts.map(d=>debtNormalize({
+    id:d.id, name:d.name, balance:Number(d.balance)||0, rate:Number(d.rate)||0,
+    minPayment:Number(d.min_payment)||0, category:d.category, institution:d.institution,
+    originalAmount: d.original_amount!=null ? Number(d.original_amount) : undefined,
+    contractDate: d.contract_date||'', firstDueDate: d.first_due_date||'', dueDay: d.due_day||undefined,
+    totalInstallments: d.total_installments||undefined, paidInstallments: d.paid_installments||0,
+    installmentAmount: d.installment_amount!=null ? Number(d.installment_amount) : undefined,
+    autoDebit: !!d.auto_debit, alreadyDebited: d.already_debited!=null ? !!d.already_debited : undefined,
+  }));
   s.gamification = { lastActiveDate: (profile && profile.last_active_date) || null, streak: 0, everHadDebt: !!(profile && profile.ever_had_debt) };
   s.ui = { tab:'dashboard', unlocked:false };
   return s;
@@ -777,7 +802,7 @@ function computeBadges(){
   push((state.gamification.streak||0)>=30,'💎','Um Mês de Disciplina','30 dias seguidos registrando gastos');
   push(state.envelopes.length>0 && state.envelopes.every(e=>e.budget<=0 || envelopeSpent(e.id,0) < e.budget*0.9),'🛡️','Orçamento Sob Controle','Nenhuma categoria acima de 90%');
   push(state.goals.some(g=>g.saved>=g.target),'🏆','Meta Conquistada','Complete sua primeira meta');
-  push(state.gamification.everHadDebt && state.debts.length===0,'🕊️','Livre de Dívidas','Quite todas as suas dívidas');
+  push(state.gamification.everHadDebt && (state.debts.length===0 || state.debts.every(d=>d.balance<=0)),'🕊️','Livre de Dívidas','Quite todas as suas dívidas');
   push(computeMetrics().savingsRate>=0.2,'📈','Economista','20%+ de taxa de economia em um mês');
   return b;
 }
@@ -884,6 +909,8 @@ function screenDashboard(){
   ${insights.map(i=>`<div class="insight">${sevBadge(i.icKey,i.sev)}<div class="tx">${i.text}</div></div>`).join('')}
 
   ${primaryGoal ? goalMiniCard(primaryGoal) : `<div class="card"><div class="empty" style="padding:20px 10px;"><div class="ic">◎</div><div class="t">Crie sua primeira meta financeira</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-goal">Criar meta</button></div></div>`}
+
+  ${debtSummaryCard()}
 
   <div class="card glow">
     <div class="card-row" style="margin-bottom:2px;">
@@ -1389,18 +1416,149 @@ function renderTable(id, headers, rows){
 }
 
 /* ---------- DÍVIDAS ---------- */
+const DEBT_CATEGORIES = [
+  {v:'financiamento', l:'Financiamento'},
+  {v:'emprestimo', l:'Empréstimo'},
+  {v:'cartao', l:'Cartão'},
+  {v:'parcelado', l:'Compra Parcelada'},
+  {v:'consorcio', l:'Consórcio'},
+  {v:'outros', l:'Outros'},
+];
+const DEBT_CATEGORY_LABEL = Object.fromEntries(DEBT_CATEGORIES.map(c=>[c.v,c.l]));
+const DEBT_CATEGORY_ICON = { financiamento:'building', emprestimo:'wallet', cartao:'card', parcelado:'box', consorcio:'building', outros:'box' };
+
+function round2(v){ return Math.round((v+Number.EPSILON)*100)/100; }
+function addMonthsISO(iso, n){
+  const d = new Date((iso||todayISO())+'T00:00:00');
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+function monthYearLabel(iso){
+  if(!iso) return '—';
+  const d = new Date(iso+'T00:00:00');
+  const l = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  return l.charAt(0).toUpperCase()+l.slice(1);
+}
+function debtNormalize(d){
+  d = d || {};
+  return {
+    id: d.id || uid(),
+    name: d.name || '',
+    category: d.category || 'outros',
+    institution: d.institution || '',
+    originalAmount: d.originalAmount != null ? d.originalAmount : (d.balance||0),
+    balance: d.balance || 0,
+    rate: d.rate || 0,
+    contractDate: d.contractDate || '',
+    firstDueDate: d.firstDueDate || todayISO(),
+    dueDay: d.dueDay || (d.firstDueDate ? Number(d.firstDueDate.slice(8,10)) : 5),
+    totalInstallments: d.totalInstallments || 1,
+    paidInstallments: d.paidInstallments || 0,
+    installmentAmount: d.installmentAmount != null ? d.installmentAmount : (d.minPayment||0),
+    minPayment: d.installmentAmount != null ? d.installmentAmount : (d.minPayment||0),
+    autoDebit: d.autoDebit != null ? d.autoDebit : false,
+    alreadyDebited: d.alreadyDebited != null ? d.alreadyDebited : true,
+  };
+}
+function debtComputed(d){
+  const total = d.totalInstallments||1;
+  const paid = clamp(d.paidInstallments||0,0,total);
+  const remaining = total-paid;
+  const pct = d.balance<=0 ? 1 : (total>0 ? paid/total : 0);
+  const nextDue = remaining>0 ? addMonthsISO(d.firstDueDate, paid) : null;
+  const payoffDate = remaining>0 ? addMonthsISO(d.firstDueDate, total-1) : d.firstDueDate;
+  const amountPaid = Math.max(0, round2((d.originalAmount||d.balance) - d.balance));
+  return { total, paid, remaining, pct, nextDue, payoffDate, amountPaid };
+}
+function simulateSingleDebtPayoff(d, extra){
+  let balance = d.balance, months=0, totalInterest=0;
+  const pay = (d.installmentAmount||0) + Math.max(0,extra||0);
+  if(pay<=0) return { months: 0, totalInterest: 0 };
+  while(balance>0.5 && months<600){
+    months++;
+    const interest = balance*(d.rate/100);
+    totalInterest += interest;
+    balance += interest;
+    balance -= Math.min(pay, balance);
+  }
+  return { months, totalInterest: Math.round(totalInterest) };
+}
+function debtSimulateSavings(d, extra){
+  const base = simulateSingleDebtPayoff(d, 0);
+  const withExtra = simulateSingleDebtPayoff(d, extra);
+  return { monthsSaved: Math.max(0, base.months-withExtra.months), interestSaved: Math.max(0, base.totalInterest-withExtra.totalInterest), newMonths: withExtra.months };
+}
+function debtInsightHTML(d){
+  const c = debtComputed(d);
+  if(c.remaining<=0 || d.balance<=0){
+    return `<div class="insight">${sevBadge('shield','good')}<div class="tx">Dívida quitada. Parabéns pela disciplina!</div></div>`;
+  }
+  let text = `Você possui <b>${c.remaining} parcela${c.remaining===1?'':'s'} restante${c.remaining===1?'':'s'}</b>. Mantendo o pagamento atual, essa dívida termina em <b>${monthYearLabel(c.payoffDate)}</b>.`;
+  const extraTry = Math.max(round2((d.installmentAmount||0)*0.15), 100);
+  const sim = debtSimulateSavings(d, extraTry);
+  if(sim.monthsSaved>0){
+    text += ` Se adicionar ${fmtBRL(extraTry)}/mês, você quita ${sim.monthsSaved} mês${sim.monthsSaved===1?'':'es'} antes e economiza aproximadamente ${fmtBRL(sim.interestSaved)} em juros.`;
+  }
+  return `<div class="insight">${sevBadge('bulb','neutral')}<div class="tx">${text}</div></div>`;
+}
+function debtTimelineHTML(d){
+  const total = d.totalInstallments||1;
+  const paid = clamp(d.paidInstallments||0,0,total);
+  let rows = '';
+  for(let i=0;i<total;i++){
+    const dateISO = addMonthsISO(d.firstDueDate, i);
+    const status = i<paid ? 'pago' : i===paid ? 'proximo' : 'futuro';
+    const label = status==='pago' ? 'Pago' : status==='proximo' ? 'Próximo' : 'Futuro';
+    const color = status==='pago' ? 'var(--good-text)' : status==='proximo' ? 'var(--brand-a)' : 'var(--text-mute)';
+    rows += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-soft);">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="width:8px;height:8px;border-radius:50%;background:${color};flex:0 0 auto;"></span><span style="font-size:12.5px;font-weight:700;">${monthYearLabel(dateISO)}</span></div>
+      <span style="font-size:11px;font-weight:800;color:${color};">${label}</span>
+    </div>`;
+  }
+  return `<div style="max-height:220px;overflow-y:auto;">${rows}</div>`;
+}
+function debtSummaryCard(){
+  if(!state.debts.length) return '';
+  const totalOriginal = state.debts.reduce((s,d)=>s+(d.originalAmount||d.balance||0),0);
+  const totalBalance = state.debts.reduce((s,d)=>s+d.balance,0);
+  const pctPaid = totalOriginal>0 ? clamp(1-(totalBalance/totalOriginal),0,1) : (totalBalance<=0?1:0);
+  return `<div class="card" data-action="goto" data-tab="debts" style="cursor:pointer;">
+    <div class="card-row" style="margin-bottom:8px;">
+      <div class="card-head"><div class="ic">${iconSVG('card',16)}</div><div class="t">Dívidas</div></div>
+      <span class="badge ${totalBalance>0?'critical':'good'}">${(pctPaid*100).toFixed(0)}% quitado</span>
+    </div>
+    <div style="font-size:22px;font-weight:800;">${money(totalBalance)}</div>
+    <div class="bar-track" style="margin-top:10px;"><div class="bar-fill ${totalBalance>0?'critical':'good'}" style="width:${pctPaid*100}%"></div></div>
+  </div>`;
+}
 function screenDebts(){
   const strategy = state.ui.debtStrategy || 'avalanche';
   const debts = [...state.debts];
-  const sorted = strategy==='avalanche' ? debts.sort((a,b)=>b.rate-a.rate) : debts.sort((a,b)=>a.balance-b.balance);
+  const sorted = debts.sort((a,b)=>{
+    if((a.balance<=0)!==(b.balance<=0)) return a.balance<=0 ? 1 : -1;
+    return strategy==='avalanche' ? b.rate-a.rate : a.balance-b.balance;
+  });
   const totalBalance = debts.reduce((s,d)=>s+d.balance,0);
+  const totalOriginal = debts.reduce((s,d)=>s+(d.originalAmount||d.balance||0),0);
+  const totalPaid = Math.max(0, round2(totalOriginal-totalBalance));
+  const totalInstPaid = debts.reduce((s,d)=>s+(d.paidInstallments||0),0);
+  const totalInstRemaining = debts.reduce((s,d)=>s+debtComputed(d).remaining,0);
+  const nextDueOverall = debts.map(d=>debtComputed(d).nextDue).filter(Boolean).sort()[0];
   const sim = debts.length ? simulateDebtPayoff(debts, strategy, state.ui.debtExtra||0) : null;
 
   return `
   <div class="card">
     <div class="card-title" style="margin-bottom:2px;">SALDO DEVEDOR TOTAL</div>
     <div class="hero-amount" style="font-size:28px;">${money(totalBalance)}</div>
-    <div class="section-sub" style="margin:0 0 8px;">${debts.length} dívida(s) cadastrada(s)</div>
+    <div class="section-sub" style="margin:0 0 14px;">${debts.length} dívida(s) cadastrada(s)</div>
+    ${debts.length ? `<div class="grid2">
+      <div class="hero-pill"><div class="lbl">VALOR PAGO</div><div class="val">${fmtBRL(totalPaid)}</div></div>
+      <div class="hero-pill"><div class="lbl">VALOR RESTANTE</div><div class="val">${fmtBRL(totalBalance)}</div></div>
+      <div class="hero-pill"><div class="lbl">PARCELAS PAGAS</div><div class="val">${totalInstPaid}</div></div>
+      <div class="hero-pill"><div class="lbl">PARCELAS RESTANTES</div><div class="val">${totalInstRemaining}</div></div>
+      <div class="hero-pill"><div class="lbl">PRÓXIMO VENCIMENTO</div><div class="val" style="font-size:13px;">${nextDueOverall?fmtDate(nextDueOverall):'—'}</div></div>
+      <div class="hero-pill"><div class="lbl">JUROS PROJETADOS</div><div class="val" style="font-size:13px;">${sim?fmtBRL(sim.totalInterest):'—'}</div></div>
+    </div>` : ''}
   </div>
   <div class="card">
     <div class="card-row" style="margin-bottom:10px;">
@@ -1418,19 +1576,113 @@ function screenDebts(){
         <div class="hero-pill"><div class="lbl">JUROS TOTAIS</div><div class="val">${money(sim.totalInterest)}</div></div>
       </div>` : ''}
   </div>
-  <div class="card">
-    <div class="card-row" style="margin-bottom:6px;"><div class="card-title" style="margin:0;">ORDEM DE PAGAMENTO</div><span class="link-btn" data-action="new-debt">+ nova dívida</span></div>
-    ${sorted.length ? sorted.map((d,i)=>debtRow(d,i)).join('') : `<div class="empty"><div class="ic">🧾</div><div class="t">Cadastre suas dívidas para receber a melhor estratégia de quitação</div><button class="btn btn-primary" style="margin-top:14px;" data-action="new-debt">Adicionar dívida</button></div>`}
-  </div>`;
+  <div class="card-title" style="margin:4px 4px 8px;display:flex;justify-content:space-between;align-items:center;">ORDEM DE PAGAMENTO<span class="link-btn" data-action="new-debt">+ nova dívida</span></div>
+  ${sorted.length ? sorted.map(d=>debtCard(d)).join('') : `<div class="card"><div class="empty"><div class="ic">${iconSVG('card',26)}</div><div class="t">Cadastre suas dívidas para receber a melhor estratégia de quitação</div><button class="btn btn-primary" style="margin-top:14px;" data-action="new-debt">Adicionar dívida</button></div></div>`}
+  `;
 }
-function debtRow(d,i){
-  return `<div class="env-item" data-action="edit-debt" data-id="${d.id}" style="cursor:pointer;">
-    <div class="env-ic" style="background:rgba(239,74,74,.12);color:var(--critical);font-weight:800;font-size:14px;">${i+1}º</div>
-    <div class="env-body">
-      <div class="env-top"><span>${esc(d.name)}</span><span>${money(d.balance)}</span></div>
-      <div class="env-meta"><span>Juros ${d.rate}% a.m.</span><span>Mín. ${fmtBRL(d.minPayment)}/mês</span></div>
+function debtCard(d){
+  const c = debtComputed(d);
+  const quitada = d.balance<=0;
+  const barClass = quitada ? 'good' : c.pct>=0.66 ? 'brand' : c.pct>=0.33 ? 'warning' : 'serious';
+  return `<div class="card" style="margin-bottom:12px;">
+    <div class="card-row" style="margin-bottom:10px;">
+      <div class="card-head"><div class="ic">${iconSVG(DEBT_CATEGORY_ICON[d.category]||'card',16)}</div><div class="t">${esc(d.name)}</div></div>
+      ${quitada ? `<span class="badge good">Quitada</span>` : d.autoDebit ? `<span class="badge neutral">Auto</span>` : ''}
+    </div>
+    <div style="font-size:22px;font-weight:800;">${money(d.balance)}</div>
+    <div class="section-sub" style="margin:2px 0 10px;">Saldo devedor${d.institution?` · ${esc(d.institution)}`:''}</div>
+    <div class="bar-track" style="margin-bottom:6px;"><div class="bar-fill ${barClass}" style="width:${c.pct*100}%"></div></div>
+    <div class="section-sub" style="margin-bottom:14px;">${(c.pct*100).toFixed(0)}% quitado</div>
+    <div class="grid2" style="margin-bottom:12px;">
+      <div class="hero-pill"><div class="lbl">PARCELAS</div><div class="val">${d.paidInstallments}/${d.totalInstallments}</div></div>
+      <div class="hero-pill"><div class="lbl">VALOR DA PARCELA</div><div class="val" style="font-size:13px;">${fmtBRL(d.installmentAmount)}</div></div>
+      <div class="hero-pill"><div class="lbl">PRÓX. VENCIMENTO</div><div class="val" style="font-size:13px;">${c.nextDue?fmtDate(c.nextDue):'—'}</div></div>
+      <div class="hero-pill"><div class="lbl">TEMPO RESTANTE</div><div class="val" style="font-size:13px;">${c.remaining>0?c.remaining+' meses':'—'}</div></div>
+    </div>
+    <div class="section-sub" style="margin-bottom:14px;">Juros ${d.rate}% a.m.</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm" style="flex:1;" data-action="debt-detail" data-id="${d.id}">Ver detalhes</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;" data-action="edit-debt" data-id="${d.id}">Editar</button>
+      ${quitada ? '' : `<button class="btn btn-primary btn-sm" style="flex:1;" data-action="quitar-debt" data-id="${d.id}">Quitar</button>`}
     </div>
   </div>`;
+}
+function openDebtDetail(id){
+  const d = state.debts.find(x=>x.id===id); if(!d) return;
+  const c = debtComputed(d);
+  const ringColor = d.balance<=0 ? STATUS_HEX.good : '#5aa6ff';
+  openModal(`
+  <div class="modal-title"><span>${esc(d.name)}</span><span class="icon-btn" data-action="close-modal" style="width:32px;height:32px;">✕</span></div>
+  <div style="display:flex;align-items:center;gap:16px;margin:6px 0 16px;">
+    ${progressRing(c.pct, 76, 7, ringColor, `<div style="font-size:15px;font-weight:800;">${(c.pct*100).toFixed(0)}%</div>`)}
+    <div>
+      <div style="font-size:22px;font-weight:800;">${money(d.balance)}</div>
+      <div class="section-sub" style="margin:2px 0 0;">de ${fmtBRL(d.originalAmount)} original</div>
+    </div>
+  </div>
+  <div class="grid2" style="margin-bottom:14px;">
+    <div class="hero-pill"><div class="lbl">INSTITUIÇÃO</div><div class="val" style="font-size:13px;">${esc(d.institution)||'—'}</div></div>
+    <div class="hero-pill"><div class="lbl">CATEGORIA</div><div class="val" style="font-size:13px;">${DEBT_CATEGORY_LABEL[d.category]||'Outros'}</div></div>
+    <div class="hero-pill"><div class="lbl">PARCELAS</div><div class="val">${d.paidInstallments}/${d.totalInstallments}</div></div>
+    <div class="hero-pill"><div class="lbl">JUROS</div><div class="val">${d.rate}% a.m.</div></div>
+  </div>
+  ${debtInsightHTML(d)}
+  <div class="card-title" style="margin:16px 0 6px;">LINHA DO TEMPO</div>
+  ${debtTimelineHTML(d)}
+  <div class="card-title" style="margin:16px 0 6px;">SIMULAR QUITAÇÃO</div>
+  <div class="field"><label>Valor extra por mês</label><input type="number" inputmode="decimal" id="debtSimExtra" placeholder="0,00" /></div>
+  <button type="button" class="btn btn-ghost btn-block" data-action="debt-simulate" data-id="${d.id}">Simular quitação</button>
+  <div id="debtSimResult" style="margin-top:10px;"></div>
+  <div style="display:flex;gap:8px;margin-top:18px;">
+    ${c.remaining>0 && d.balance>0 ? `<button class="btn btn-ghost" style="flex:1;" data-action="pay-installment-debt" data-id="${d.id}">Pagar parcela</button>` : ''}
+    <button class="btn btn-ghost" style="flex:1;" data-action="edit-debt" data-id="${d.id}">Editar</button>
+    ${d.balance>0 ? `<button class="btn btn-primary" style="flex:1;" data-action="quitar-debt" data-id="${d.id}">Quitar</button>` : ''}
+  </div>
+  `);
+}
+function payDebtInstallment(id){
+  const d = state.debts.find(x=>x.id===id); if(!d || d.balance<=0) return;
+  d.paidInstallments = Math.min(d.totalInstallments, (d.paidInstallments||0)+1);
+  d.balance = Math.max(0, round2(d.balance - d.installmentAmount));
+  const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:'', date: todayISO(), note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name}`, createdAt: Date.now() };
+  state.transactions.push(tx);
+  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
+  cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:d.balance });
+  updateStreak(); save(); closeModal(); render();
+  const remaining = d.totalInstallments-d.paidInstallments;
+  toast(remaining>0 ? `Parabéns! Agora faltam apenas ${remaining} parcela(s).` : 'Parabéns! Dívida quitada! 🎉');
+}
+function quitarDebt(id){
+  const d = state.debts.find(x=>x.id===id); if(!d) return;
+  if(d.balance<=0){ toast('Essa dívida já está quitada'); return; }
+  if(!confirm(`Quitar "${d.name}" agora, lançando ${fmtBRL(d.balance)} como despesa?`)) return;
+  const payoffAmount = d.balance;
+  const tx = { id: uid(), type:'expense', amount:payoffAmount, category:'Dívidas', envelopeId:'', date: todayISO(), note:`Quitação — ${d.name}`, createdAt: Date.now() };
+  state.transactions.push(tx);
+  d.balance = 0; d.paidInstallments = d.totalInstallments;
+  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
+  cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:0 });
+  updateStreak(); save(); closeModal(); render(); toast('Dívida quitada! 🎉');
+}
+function processAutoDebits(){
+  const today = todayISO();
+  let changed = false;
+  state.debts.forEach(d=>{
+    if(!d.autoDebit || d.balance<=0 || !d.firstDueDate) return;
+    let guard = 0;
+    while(d.paidInstallments < d.totalInstallments && addMonthsISO(d.firstDueDate, d.paidInstallments) <= today && guard<600){
+      guard++;
+      const dueISO = addMonthsISO(d.firstDueDate, d.paidInstallments);
+      d.paidInstallments += 1;
+      d.balance = Math.max(0, round2(d.balance - d.installmentAmount));
+      const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:'', date: dueISO, note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name} (débito automático)`, createdAt: Date.now() };
+      state.transactions.push(tx);
+      cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
+      changed = true;
+    }
+    if(changed) cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:d.balance });
+  });
+  if(changed){ updateStreak(); save(); toast('Parcela(s) de dívida debitada(s) automaticamente'); }
 }
 function simulateDebtPayoff(debts, strategy, extra){
   let list = debts.map(d=>({...d}));
@@ -1816,20 +2068,44 @@ function openContributeForm(goalId){
 
 function openDebtForm(existing){
   const isEdit = !!existing;
-  const d = existing || { name:'', balance:'', rate:'', minPayment:'' };
+  const d = debtNormalize(existing);
   openModal(`
   <div class="modal-title"><span>${isEdit?'Editar dívida':'Nova dívida'}</span><span class="icon-btn" data-action="close-modal" style="width:32px;height:32px;">✕</span></div>
   <form id="debtForm">
-    <div class="field"><label>Nome</label><input required type="text" id="debtName" value="${esc(d.name)}" placeholder="Ex: Cartão Nubank" /></div>
-    <div class="field"><label>Saldo devedor (R$)</label><input required type="number" step="0.01" id="debtBalance" value="${d.balance}" /></div>
+    <div class="card-title" style="margin:0 0 10px;">INFORMAÇÕES GERAIS</div>
+    <div class="field"><label>Nome</label><input required type="text" id="debtName" value="${esc(d.name)}" placeholder="Ex: Financiamento Honda" /></div>
     <div class="field-row">
-      <div class="field"><label>Juros ao mês (%)</label><input required type="number" step="0.01" id="debtRate" value="${d.rate}" /></div>
-      <div class="field"><label>Pagamento mínimo (R$)</label><input required type="number" step="0.01" id="debtMin" value="${d.minPayment}" /></div>
+      <div class="field"><label>Categoria</label><select id="debtCategory">${DEBT_CATEGORIES.map(c=>`<option value="${c.v}" ${d.category===c.v?'selected':''}>${c.l}</option>`).join('')}</select></div>
+      <div class="field"><label>Instituição</label><input type="text" id="debtInstitution" value="${esc(d.institution)}" placeholder="Banco, loja, pessoa…" /></div>
     </div>
-    <button class="btn btn-primary btn-block" type="submit">${isEdit?'Salvar':'Adicionar dívida'}</button>
+    <div class="field-row">
+      <div class="field"><label>Valor original (R$)</label><input required type="number" step="0.01" id="debtOriginal" value="${d.originalAmount||''}" /></div>
+      <div class="field"><label>Saldo devedor atual (R$)</label><input required type="number" step="0.01" id="debtBalance" value="${d.balance||''}" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Juros ao mês (%)</label><input required type="number" step="0.01" id="debtRate" value="${d.rate||''}" /></div>
+      <div class="field"><label>Dia do vencimento</label><input type="number" min="1" max="31" id="debtDueDay" value="${d.dueDay||5}" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data da contratação</label><input type="date" id="debtContractDate" value="${d.contractDate}" /></div>
+      <div class="field"><label>Primeiro vencimento</label><input required type="date" id="debtFirstDue" value="${d.firstDueDate}" /></div>
+    </div>
+
+    <div class="card-title" style="margin:18px 0 10px;">PARCELAMENTO</div>
+    <div class="field-row">
+      <div class="field"><label>Total de parcelas</label><input required type="number" min="1" id="debtTotalInst" value="${d.totalInstallments}" /></div>
+      <div class="field"><label>Parcelas pagas</label><input required type="number" min="0" id="debtPaidInst" value="${d.paidInstallments}" /></div>
+    </div>
+    <div class="field"><label>Valor da parcela (R$)</label><input required type="number" step="0.01" id="debtInstallmentAmount" value="${d.installmentAmount||''}" /></div>
+
+    <div class="toggle-row"><span class="lbl">Débito automático</span><label class="switch"><input type="checkbox" id="debtAutoDebit" ${d.autoDebit?'checked':''} /><span class="track"></span></label></div>
+    <div class="section-sub" style="margin:-6px 0 4px;">No vencimento, o ATLAS lança a parcela como despesa sozinho na próxima vez que você abrir o app.</div>
+    <div class="toggle-row"><span class="lbl">Já está sendo debitado fora do ATLAS</span><label class="switch"><input type="checkbox" id="debtAlreadyDebited" ${d.alreadyDebited?'checked':''} /><span class="track"></span></label></div>
+
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" type="submit">${isEdit?'Salvar':'Adicionar dívida'}</button>
     ${isEdit?`<button type="button" class="btn btn-danger btn-block" style="margin-top:10px;" data-action="delete-debt" data-id="${d.id}">Excluir dívida</button>`:''}
   </form>`);
-  if(isEdit) document.getElementById('debtForm').dataset.id = d.id;
+  if(isEdit) document.getElementById('debtForm').dataset.id = existing.id;
 }
 
 function openOnboarding(){
@@ -1910,6 +2186,21 @@ document.addEventListener('click', (e)=>{
       save(); closeModal(); render(); toast('Dívida removida');
       cloudDelete('debts', el.dataset.id); break;
     case 'debt-strategy': state.ui.debtStrategy = el.dataset.s; render(); break;
+    case 'debt-detail': openDebtDetail(el.dataset.id); break;
+    case 'pay-installment-debt': payDebtInstallment(el.dataset.id); break;
+    case 'quitar-debt': quitarDebt(el.dataset.id); break;
+    case 'debt-simulate': {
+      const dd = state.debts.find(x=>x.id===el.dataset.id); if(!dd) break;
+      const extra = parseFloat(document.getElementById('debtSimExtra').value)||0;
+      const box = document.getElementById('debtSimResult');
+      if(extra<=0){ box.innerHTML = ''; break; }
+      const sim = debtSimulateSavings(dd, extra);
+      box.innerHTML = `<div class="grid2">
+        <div class="hero-pill"><div class="lbl">QUITA EM</div><div class="val">${sim.newMonths} meses</div></div>
+        <div class="hero-pill"><div class="lbl">ECONOMIA EM JUROS</div><div class="val" style="color:var(--good-text)">${fmtBRL(sim.interestSaved)}</div></div>
+      </div>${sim.monthsSaved>0?`<div class="section-sub" style="margin-top:8px;">Você quitaria ${sim.monthsSaved} mês(es) antes.</div>`:''}`;
+      break;
+    }
     case 'toggle-table': {
       const t = document.getElementById('table-'+el.dataset.t);
       t.style.display = t.style.display==='none' ? 'block' : 'none';
@@ -2062,13 +2353,34 @@ document.addEventListener('submit', (e)=>{
   if(e.target.id==='debtForm'){
     e.preventDefault();
     const id = e.target.dataset.id;
-    const rec = { id: id||uid(), name: document.getElementById('debtName').value.trim(), balance: parseFloat(document.getElementById('debtBalance').value)||0, rate: parseFloat(document.getElementById('debtRate').value)||0, minPayment: parseFloat(document.getElementById('debtMin').value)||0 };
+    const total = Math.max(1, parseInt(document.getElementById('debtTotalInst').value)||1);
+    const paid = clamp(parseInt(document.getElementById('debtPaidInst').value)||0, 0, total);
+    const installmentAmount = parseFloat(document.getElementById('debtInstallmentAmount').value)||0;
+    const rec = {
+      id: id||uid(),
+      name: document.getElementById('debtName').value.trim(),
+      category: document.getElementById('debtCategory').value,
+      institution: document.getElementById('debtInstitution').value.trim(),
+      originalAmount: parseFloat(document.getElementById('debtOriginal').value)||0,
+      balance: parseFloat(document.getElementById('debtBalance').value)||0,
+      rate: parseFloat(document.getElementById('debtRate').value)||0,
+      contractDate: document.getElementById('debtContractDate').value,
+      firstDueDate: document.getElementById('debtFirstDue').value,
+      dueDay: parseInt(document.getElementById('debtDueDay').value)||5,
+      totalInstallments: total,
+      paidInstallments: paid,
+      installmentAmount,
+      minPayment: installmentAmount,
+      autoDebit: document.getElementById('debtAutoDebit').checked,
+      alreadyDebited: document.getElementById('debtAlreadyDebited').checked,
+    };
+    const cloudPayload = { name:rec.name, category:rec.category, institution:rec.institution, original_amount:rec.originalAmount, balance:rec.balance, rate:rec.rate, contract_date:rec.contractDate||null, first_due_date:rec.firstDueDate||null, due_day:rec.dueDay, total_installments:rec.totalInstallments, paid_installments:rec.paidInstallments, installment_amount:rec.installmentAmount, min_payment:rec.minPayment, auto_debit:rec.autoDebit, already_debited:rec.alreadyDebited };
     if(id){
       state.debts = state.debts.map(d=>d.id===id?rec:d);
-      cloudUpdate('debts', id, { name:rec.name, balance:rec.balance, rate:rec.rate, min_payment:rec.minPayment });
+      cloudUpdate('debts', id, cloudPayload);
     } else {
       state.debts.push(rec); state.gamification.everHadDebt = true;
-      cloudInsert('debts', { id:rec.id, user_id: session?.user?.id, name:rec.name, balance:rec.balance, rate:rec.rate, min_payment:rec.minPayment });
+      cloudInsert('debts', { id:rec.id, user_id: session?.user?.id, ...cloudPayload });
       cloudUpdateProfile({ ever_had_debt: true });
     }
     save(); closeModal(); render(); toast(id?'Dívida atualizada':'Dívida adicionada');
@@ -2232,6 +2544,7 @@ async function afterLogin(){
   document.querySelector('.tabbar').style.display = '';
   if(state.security.pin){ await checkPin(); }
   updateStreak();
+  processAutoDebits();
   render();
   if(!state.onboarded){ setTimeout(openOnboarding, 350); }
 }
@@ -2315,6 +2628,7 @@ async function continueBoot(){
   } else {
     if(state.security.pin){ await checkPin(); }
     updateStreak();
+    processAutoDebits();
     render();
     if(!state.onboarded){ setTimeout(openOnboarding, 350); }
   }

@@ -20,9 +20,15 @@ lançamento.
   laranja → vermelho) em 80% / 90% / 100% do limite.
 - **Metas** — defina valor alvo e prazo; o app calcula o aporte mensal
   necessário e avisa se você está adiantado ou atrasado.
-- **Central de dívidas** — cadastre suas dívidas e compare as estratégias
-  *Snowball* (menor saldo primeiro) e *Avalanche* (maior juros primeiro), com
-  simulação de meses até quitação e juros totais projetados.
+- **Central de dívidas** — gerenciador completo de financiamentos, empréstimos,
+  cartões parcelados, consórcios e compras parceladas: categoria, instituição,
+  valor original, parcelas pagas/restantes, linha do tempo mês a mês, insight
+  automático de quando a dívida termina, simulador "e se eu pagar R$X a mais",
+  botões **Pagar parcela** e **Quitar**, além das estratégias *Snowball*
+  (menor saldo primeiro) e *Avalanche* (maior juros primeiro). Com **débito
+  automático** ligado, o ATLAS lança a parcela como despesa sozinho na
+  próxima vez que o app é aberto após o vencimento (não é um débito bancário
+  de verdade — é o ATLAS mantendo o controle atualizado pra você).
 - **Relatórios** — receitas x despesas dos últimos 6 meses e gastos por
   categoria no mês, com tabela de dados acessível.
 - **Gamificação** — nível, XP, sequência diária (streak) e medalhas para
@@ -94,6 +100,11 @@ com `user_id` e Row Level Security — cada pessoa só acessa os próprios dados
 
 Enquanto esses dois valores não forem preenchidos, o ATLAS continua
 funcionando 100% local (sem tela de login), como antes.
+
+**Já rodou o schema antes (versão antiga da tabela `debts`)?** A tabela de
+dívidas ganhou colunas novas (categoria, instituição, parcelas, débito
+automático etc.). Vá no final de `supabase_schema.sql` e rode só o bloco
+"MIGRAÇÃO" — é seguro rodar mesmo se as colunas já existirem.
 
 **Confirmação de e-mail:** por padrão o Supabase Auth exige confirmar o
 e-mail antes do primeiro login — pode desligar isso em **Authentication >
