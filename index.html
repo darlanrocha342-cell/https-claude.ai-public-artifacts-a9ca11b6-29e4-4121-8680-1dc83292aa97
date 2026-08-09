@@ -638,14 +638,14 @@ function screenDashboard(){
 
   ${primaryGoal ? goalMiniCard(primaryGoal) : `<div class="card"><div class="empty" style="padding:20px 10px;"><div class="ic">◎</div><div class="t">Crie sua primeira meta financeira</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-goal">Criar meta</button></div></div>`}
 
-  <div class="card">
+  <div class="card glow">
     <div class="card-row" style="margin-bottom:2px;">
       <div class="card-head"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Orçamento — categorias de atenção</div></div>
       <span class="link-btn" data-action="goto" data-tab="budget">ver tudo</span>
     </div>
     ${topEnvelopes.length ? `
-      <div style="position:relative;margin-top:8px;"><canvas id="chartAttn"></canvas></div>
-      <div class="link-btn" data-action="toggle-table" data-t="attn" style="margin-top:10px;display:inline-block;">ver tabela</div>
+      <div style="position:relative;margin-top:4px;"><canvas id="chartAttn"></canvas></div>
+      <div class="link-btn" data-action="toggle-table" data-t="attn" style="margin-top:6px;display:inline-block;">ver tabela</div>
       <div id="table-attn" style="display:none;"></div>
     ` : `<div class="empty" style="padding:16px;"><div class="t">Configure envelopes de orçamento na aba Orçamento</div></div>`}
   </div>
@@ -790,15 +790,15 @@ function screenMore(){
 /* ---------- RELATÓRIOS ---------- */
 function screenReports(){
   return `
-  <div class="card">
-    <div class="card-title" style="margin-bottom:2px;">RECEITAS x DESPESAS — 6 MESES</div>
+  <div class="card glow">
+    <div class="card-head" style="margin-bottom:20px;"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Receitas x Despesas — 6 meses</div></div>
     <div style="position:relative;"><canvas id="chartBars" height="180"></canvas></div>
     <div class="legend"><span class="legend-item"><span class="legend-dot" style="background:var(--c1)"></span>Receitas</span><span class="legend-item"><span class="legend-dot" style="background:var(--c2)"></span>Despesas</span></div>
     <div class="link-btn" data-action="toggle-table" data-t="bars" style="margin-top:10px;display:inline-block;">ver tabela</div>
     <div id="table-bars" style="display:none;"></div>
   </div>
-  <div class="card">
-    <div class="card-title" style="margin-bottom:2px;">GASTOS POR CATEGORIA — ESTE MÊS</div>
+  <div class="card glow">
+    <div class="card-head" style="margin-bottom:6px;"><div class="ic">${iconSVG('food',16)}</div><div class="t">Gastos por categoria — este mês</div></div>
     <div style="position:relative;"><canvas id="chartDonut" height="220"></canvas></div>
     <div class="legend" id="donutLegend"></div>
     <div class="link-btn" data-action="toggle-table" data-t="donut" style="margin-top:10px;display:inline-block;">ver tabela</div>
@@ -819,11 +819,11 @@ function drawBarChart(){
     return { label: monthLabel(o), income: sumBy(list,'income')+(o===0?state.income.monthlyBase:0), expense: sumBy(list,'expense') };
   });
   const maxV = Math.max(1, ...data.map(d=>Math.max(d.income,d.expense)));
-  const padL=8, padB=22, padT=8;
+  const padL=8, padB=22, padT=32;
   const chartW = w-padL*2, chartH = h-padB-padT;
   const groupW = chartW/data.length;
   const barW = Math.min(16, groupW*0.28);
-  ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth=1;
+  ctx.strokeStyle = 'rgba(148,180,214,.16)'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(padL, h-padB+.5); ctx.lineTo(w-padL, h-padB+.5); ctx.stroke();
 
   window._barPoints = [];
@@ -831,11 +831,19 @@ function drawBarChart(){
     const cx = padL + groupW*i + groupW/2;
     const hIncome = (d.income/maxV)*chartH;
     const hExpense = (d.expense/maxV)*chartH;
+    const incomeX = cx-barW-2, expenseX = cx+2;
+    const incomeY = h-padB-hIncome, expenseY = h-padB-hExpense;
     ctx.fillStyle = getCss('--c1');
-    roundRectTop(ctx, cx-barW-2, h-padB-hIncome, barW, hIncome, 4); ctx.fill();
+    roundRectTop(ctx, incomeX, incomeY, barW, hIncome, 4); ctx.fill();
     ctx.fillStyle = getCss('--c2');
-    roundRectTop(ctx, cx+2, h-padB-hExpense, barW, hExpense, 4); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font='10px Inter'; ctx.textAlign='center';
+    roundRectTop(ctx, expenseX, expenseY, barW, hExpense, 4); ctx.fill();
+
+    if(i === data.length-1){
+      drawMiniTag(ctx, incomeX+barW/2, incomeY, getCss('--c1'), formatCompact(d.income));
+      drawMiniTag(ctx, expenseX+barW/2, expenseY, getCss('--c2'), formatCompact(d.expense));
+    }
+
+    ctx.fillStyle = 'rgba(199,212,230,.6)'; ctx.font='700 10px Inter'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     ctx.fillText(d.label, cx, h-6);
     window._barPoints.push({x:cx, y0:h-padB-Math.max(hIncome,hExpense), y1:h-padB, w:groupW, d});
   });
@@ -851,6 +859,21 @@ function roundRectTop(ctx,x,y,w,h,r){
   ctx.lineTo(x+w, y+h); ctx.lineTo(x,y+h); ctx.closePath();
 }
 function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function formatCompact(v){
+  if(v>=1000) return 'R$'+(v/1000).toFixed(v%1000===0?0:1).replace('.',',')+'k';
+  return 'R$'+Math.round(v);
+}
+function drawMiniTag(ctx, cx, barTopY, color, text){
+  ctx.font = '800 9.5px Inter';
+  const tagW = ctx.measureText(text).width + 10, tagH = 16;
+  const tagX = cx - tagW/2, tagY = Math.max(1, barTopY - tagH - 5);
+  roundRectFull(ctx, tagX, tagY, tagW, tagH, tagH/2);
+  ctx.fillStyle = 'rgba(6,10,18,.92)'; ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, cx, tagY + tagH/2 + 0.5);
+  ctx.textBaseline = 'alphabetic';
+}
 function roundRectFull(ctx,x,y,w,h,r){
   r = Math.min(r, h/2, Math.max(w,0.01)/2);
   ctx.beginPath();
@@ -865,37 +888,49 @@ function roundRectFull(ctx,x,y,w,h,r){
 function drawAttentionChart(){
   const canvas = document.getElementById('chartAttn'); if(!canvas) return;
   const list = [...state.envelopes].sort((a,b)=> (envelopeSpent(b.id,0)/(b.budget||1)) - (envelopeSpent(a.id,0)/(a.budget||1)) ).slice(0,4);
-  const rowH = 40, padTop = 4;
-  const h = list.length*rowH + padTop;
   const dpr = window.devicePixelRatio||1;
-  const w = canvas.clientWidth;
+  const w = canvas.clientWidth, h = 188;
   canvas.style.height = h+'px';
   canvas.width = w*dpr; canvas.height = h*dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,w,h);
 
-  const barH = 8, barMaxW = w - 46;
+  const padTop = 34, padBottom = 22;
+  const chartH = h - padTop - padBottom;
+  const slotW = w / list.length;
+  const barW = Math.min(48, slotW*0.4);
+
+  ctx.strokeStyle = 'rgba(148,180,214,.16)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h-padBottom+.5); ctx.lineTo(w, h-padBottom+.5); ctx.stroke();
+
   window._attnPoints = [];
   list.forEach((e,i)=>{
     const spent = envelopeSpent(e.id,0);
     const pct = e.budget>0 ? spent/e.budget : 0;
     const status = statusForPct(pct);
     const color = getCss('--'+(status==='good'?'good-text':status));
-    const y = padTop + i*rowH;
+    const cx = slotW*i + slotW/2;
+    const barH = Math.max(clamp(pct,0,1) * chartH, 3);
+    const barY = h - padBottom - barH;
 
-    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '700 12px Inter'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(e.name, 0, y + 11);
-    ctx.fillStyle = color; ctx.font = '800 12px Inter'; ctx.textAlign = 'right';
-    ctx.fillText(Math.round(pct*100) + '%', w, y + 11);
+    ctx.fillStyle = color;
+    roundRectTop(ctx, cx-barW/2, barY, barW, barH, 7); ctx.fill();
 
-    ctx.fillStyle = 'rgba(255,255,255,.08)';
-    roundRectFull(ctx, 0, y + 17, barMaxW, barH, barH/2); ctx.fill();
-    const fillW = clamp(pct, 0, 1) * barMaxW;
-    if(fillW > 0){
-      ctx.fillStyle = color;
-      roundRectFull(ctx, 0, y + 17, Math.max(fillW, barH), barH, barH/2); ctx.fill();
-    }
-    window._attnPoints.push({ y0: y, y1: y+rowH, e, spent, pct });
+    const label = Math.round(pct*100)+'%';
+    ctx.font = '800 11px Inter';
+    const tagW = ctx.measureText(label).width + 16, tagH = 21;
+    const tagX = cx - tagW/2, tagY = Math.max(2, barY - tagH - 7);
+    roundRectFull(ctx, tagX, tagY, tagW, tagH, tagH/2);
+    ctx.fillStyle = 'rgba(6,10,18,.92)'; ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, tagY + tagH/2 + 0.5);
+
+    let name = e.name; if(name.length > 9) name = name.slice(0,8)+'…';
+    ctx.fillStyle = 'rgba(199,212,230,.65)'; ctx.font = '700 10.5px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(name, cx, h-6);
+
+    window._attnPoints.push({ x0: slotW*i, x1: slotW*(i+1), e, spent, pct });
   });
 
   renderTable('attn', ['Categoria','Gasto','Orçamento','%'], list.map(e=>{
@@ -912,7 +947,7 @@ function drawDonut(){
   canvas.width=w*dpr; canvas.height=h*dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,w,h);
-  const cx=w/2, cy=h/2, rOuter=Math.min(w,h)/2-10, rInner=rOuter*0.62;
+  const cx=w/2, cy=h/2, rOuter=Math.min(w,h)/2-10, rInner=rOuter*0.56;
   let data = state.envelopes.map((e,i)=>({name:e.name, val: envelopeSpent(e.id,0), color: ENVELOPE_COLORS[i%ENVELOPE_COLORS.length]}))
     .filter(d=>d.val>0).sort((a,b)=>b.val-a.val);
   if(data.length>8){
@@ -931,9 +966,13 @@ function drawDonut(){
   window._donutSlices = [];
   data.forEach(d=>{
     const angle = (d.val/total)*Math.PI*2;
+    ctx.save();
+    ctx.shadowColor = d.color; ctx.shadowBlur = 14;
     ctx.beginPath(); ctx.moveTo(cx,cy);
     ctx.arc(cx,cy,rOuter,start,start+angle); ctx.closePath();
     ctx.fillStyle = d.color; ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(6,10,18,.9)'; ctx.lineWidth = 2; ctx.stroke();
     window._donutSlices.push({start, end:start+angle, d});
     start += angle;
   });
@@ -1096,12 +1135,12 @@ function attachAttentionTooltip(){
   let tip;
   canvas.addEventListener('mousemove', e=>{
     const rect = canvas.getBoundingClientRect();
-    const y = e.clientY-rect.top;
-    const pt = (window._attnPoints||[]).find(p=>y>=p.y0 && y<p.y1);
+    const x = e.clientX-rect.left;
+    const pt = (window._attnPoints||[]).find(p=>x>=p.x0 && x<p.x1);
     if(!tip){ tip=document.createElement('div'); tip.className='tooltip-box'; canvas.parentElement.appendChild(tip); }
     if(pt){
       tip.style.display='block';
-      tip.style.left = '0px'; tip.style.top = (pt.y0-2)+'px';
+      tip.style.left = Math.max(0, (pt.x0+pt.x1)/2 - 55)+'px'; tip.style.top = '2px';
       tip.innerHTML = `<b>${esc(pt.e.name)}</b><br>${fmtBRL(pt.spent)} de ${fmtBRL(pt.e.budget)} (${Math.round(pt.pct*100)}%)`;
     } else if(tip) tip.style.display='none';
   });
