@@ -275,6 +275,25 @@ table.datatable td{ padding:7px 4px; border-bottom:1px solid var(--border-soft);
 .pin-dot.filled{ background: var(--brand-grad); border-color: transparent; }
 .pin-pad{ display:grid; grid-template-columns:repeat(3,64px); gap:16px; }
 .pin-key{ width:64px; height:64px; border-radius:50%; border:1px solid var(--border); background: var(--surface-2); color:#fff; font-size:20px; font-weight:700; cursor:pointer; }
+
+/* drawer (menu hambúrguer) */
+.drawer-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter: blur(3px); z-index:60; display:none; }
+.drawer-backdrop.open{ display:block; animation: fadeIn .2s ease; }
+.drawer-panel{
+  position:fixed; top:0; bottom:0; left:0; width:80%; max-width:300px; z-index:61;
+  background:#0d1220; border-right:1px solid var(--border); box-shadow: 10px 0 40px rgba(0,0,0,.5);
+  padding: calc(20px + var(--safe-top)) 18px calc(20px + var(--safe-bottom)); display:flex; flex-direction:column;
+  transform: translateX(-100%); transition: transform .3s cubic-bezier(.2,.8,.2,1);
+}
+.drawer-backdrop.open .drawer-panel{ transform: translateX(0); }
+.drawer-head{ display:flex; align-items:center; gap:11px; padding-bottom:18px; margin-bottom:8px; border-bottom:1px solid var(--border-soft); }
+.drawer-name{ font-weight:800; font-size:15px; }
+.drawer-sub{ font-size:11.5px; color:var(--text-mute); }
+.drawer-item{ display:flex; align-items:center; gap:13px; padding:13px 6px; border-radius:12px; cursor:pointer; }
+.drawer-item:active{ background: var(--surface-2); }
+.drawer-item .ic{ width:34px; height:34px; border-radius:10px; background: var(--surface-2); border:1px solid var(--border-soft); color:var(--text-dim); display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.drawer-item .t{ font-size:14px; font-weight:700; }
+.drawer-item .d{ font-size:11px; color:var(--text-mute); margin-top:1px; }
 .pin-key:active{ background: var(--surface); }
 .toast{ position:fixed; left:50%; bottom:calc(110px + var(--safe-bottom)); transform:translateX(-50%); background:#1c1c20; border:1px solid var(--border); padding:11px 18px; border-radius:99px; font-size:12.5px; font-weight:700; z-index:80; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition: opacity .25s ease, transform .25s ease; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
@@ -291,6 +310,7 @@ canvas{ display:block; max-width:100%; }
 <button class="fab" id="fabAdd" title="Adicionar lançamento">+</button>
 <div class="tabbar"><div class="tabbar-inner" id="tabbar"></div></div>
 <div class="modal-backdrop" id="modalBackdrop"><div class="modal-sheet" id="modalSheet"></div></div>
+<div class="drawer-backdrop" id="drawerBackdrop"><div class="drawer-panel" id="drawerPanel"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -336,6 +356,11 @@ const ICONS = {
   alert:  '<circle cx="12" cy="12" r="8.5"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.3" r=".9" fill="currentColor" stroke="none"/>',
   bulb:   '<path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2.2h5c.1-1 .5-1.7 1.1-2.2A6 6 0 0 0 12 3z"/><line x1="9.5" y1="18" x2="14.5" y2="18"/><line x1="10.3" y1="21" x2="13.7" y2="21"/>',
   clock:  '<circle cx="12" cy="12" r="8.5"/><polyline points="12 7.5 12 12 15.5 13.8"/>',
+  list:   '<circle cx="4" cy="6" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="6" x2="20" y2="6"/><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="12" x2="20" y2="12"/><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="18" x2="20" y2="18"/>',
+  menu:   '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
+  wallet: '<path d="M3 7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1H5a2 2 0 0 0-2 2z"/><path d="M3 8h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="15.5" cy="13.5" r="1.2" fill="currentColor" stroke="none"/>',
+  medal:  '<circle cx="12" cy="15" r="5"/><path d="M9 11 7 3h3l2 6"/><path d="M15 11 17 3h-3l-2 6"/>',
+  settings: '<circle cx="12" cy="12" r="3.3"/><circle cx="12" cy="12" r="7"/><line x1="19" y1="12" x2="21.3" y2="12"/><line x1="16.8" y1="16.8" x2="18.5" y2="18.5"/><line x1="12" y1="19" x2="12" y2="21.3"/><line x1="7.2" y1="16.8" x2="5.5" y2="18.5"/><line x1="5" y1="12" x2="2.7" y2="12"/><line x1="7.2" y1="7.2" x2="5.5" y2="5.5"/><line x1="12" y1="5" x2="12" y2="2.7"/><line x1="16.8" y1="7.2" x2="18.5" y2="5.5"/>',
 };
 function iconSVG(key, size){
   size = size || 20;
@@ -587,24 +612,25 @@ function computeBadges(){
 
 /* ---------- render shell ---------- */
 const TABS = [
-  {id:'dashboard', ic:'◆', label:'Início'},
-  {id:'transactions', ic:'≋', label:'Lançamentos'},
-  {id:'budget', ic:'▣', label:'Orçamento'},
-  {id:'goals', ic:'◎', label:'Metas'},
-  {id:'more', ic:'•••', label:'Mais'},
+  {id:'dashboard', ic:'home', label:'Início'},
+  {id:'transactions', ic:'list', label:'Lançamentos'},
+  {id:'budget', ic:'wallet', label:'Orçamento'},
+  {id:'goals', ic:'flag', label:'Metas'},
+  {id:'reports', ic:'chart', label:'Relatórios'},
 ];
+const DRAWER_TABS = ['debts','achievements','settings'];
 function renderTabbar(){
   const el = document.getElementById('tabbar');
   el.innerHTML = TABS.map(t=>`
     <button class="tab-btn ${state.ui.tab===t.id?'active':''}" data-action="goto" data-tab="${t.id}">
-      <span class="ic">${t.ic}</span><span>${t.label}</span>
+      <span class="ic">${iconSVG(t.ic,20)}</span><span>${t.label}</span>
     </button>`).join('');
 }
 
 function render(){
   renderTabbar();
   const app = document.getElementById('app');
-  const screens = { dashboard: screenDashboard, transactions: screenTransactions, budget: screenBudget, goals: screenGoals, more: screenMore, reports: screenReports, debts: screenDebts, achievements: screenAchievements, settings: screenSettings };
+  const screens = { dashboard: screenDashboard, transactions: screenTransactions, budget: screenBudget, goals: screenGoals, reports: screenReports, debts: screenDebts, achievements: screenAchievements, settings: screenSettings };
   const fn = screens[state.ui.tab] || screenDashboard;
   app.innerHTML = topbarHTML() + `<main><div class="screen">${fn()}</div></main>`;
   document.getElementById('fabAdd').style.display = ['dashboard','transactions','budget','goals','debts'].includes(state.ui.tab) ? 'flex' : 'none';
@@ -612,7 +638,7 @@ function render(){
 }
 
 function topbarHTML(){
-  const titleMap = { dashboard:'', transactions:'Lançamentos', budget:'Orçamento', goals:'Metas', more:'Mais', reports:'Relatórios', debts:'Central de Dívidas', achievements:'Conquistas', settings:'Configurações' };
+  const titleMap = { dashboard:'', transactions:'Lançamentos', budget:'Orçamento', goals:'Metas', reports:'Relatórios', debts:'Central de Dívidas', achievements:'Conquistas', settings:'Configurações' };
   const title = titleMap[state.ui.tab];
   if(state.ui.tab==='dashboard'){
     const hour = new Date().getHours();
@@ -622,16 +648,19 @@ function topbarHTML(){
       <div class="topbar-actions">
         <button class="icon-btn ${state.gamification.streak>0?'active':''}" data-action="goto" data-tab="achievements" title="Sequência">🔥<span style="font-size:10px;margin-left:2px;">${state.gamification.streak||0}</span></button>
         <button class="icon-btn ${state.privacy.hideValues?'active':''}" data-action="toggle-privacy" title="Ocultar valores">${state.privacy.hideValues?'🙈':'👁️'}</button>
+        <button class="icon-btn" data-action="open-drawer" title="Menu">${iconSVG('menu',17)}</button>
       </div>
     </div>`;
   }
+  const isDrawerScreen = DRAWER_TABS.includes(state.ui.tab);
   return `<div class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      ${state.ui.tab!=='more' ? `<button class="icon-btn" data-action="goto" data-tab="more">←</button>`:'<div class="brand-mark">Z</div>'}
+      ${isDrawerScreen ? `<button class="icon-btn" data-action="goto" data-tab="dashboard">←</button>` : `<div class="brand-mark">Z</div>`}
       <div class="brand-name" style="font-size:17px;">${title}</div>
     </div>
     <div class="topbar-actions">
       <button class="icon-btn ${state.privacy.hideValues?'active':''}" data-action="toggle-privacy">${state.privacy.hideValues?'🙈':'👁️'}</button>
+      <button class="icon-btn" data-action="open-drawer" title="Menu">${iconSVG('menu',17)}</button>
     </div>
   </div>`;
 }
@@ -815,23 +844,6 @@ function goalCard(g){
     </div>
     ${projectionText?`<div class="section-sub" style="margin-top:10px;">${projectionText}</div>`:''}
     <button class="btn btn-ghost btn-block btn-sm" style="margin-top:12px;" data-action="contribute-goal" data-id="${g.id}">+ Adicionar aporte</button>
-  </div>`;
-}
-
-/* ---------- MAIS ---------- */
-function screenMore(){
-  const items = [
-    {tab:'reports', ic:'📊', t:'Relatórios', d:'Gráficos e evolução financeira'},
-    {tab:'debts', ic:'🧾', t:'Central de Dívidas', d:'Snowball, avalanche e simulações'},
-    {tab:'achievements', ic:'🏅', t:'Conquistas', d:'Nível, sequência e medalhas'},
-    {tab:'settings', ic:'⚙️', t:'Configurações', d:'Perfil, privacidade e dados'},
-  ];
-  return `<div class="card" style="padding:8px 18px;">
-    ${items.map(i=>`<div class="tx-item" data-action="goto" data-tab="${i.tab}">
-      <div class="tx-ic" style="font-size:19px;">${i.ic}</div>
-      <div class="tx-body"><div class="tx-name">${i.t}</div><div class="tx-meta">${i.d}</div></div>
-      <div style="color:var(--text-mute);">›</div>
-    </div>`).join('')}
   </div>`;
 }
 
@@ -1220,6 +1232,26 @@ function openModal(html){
 }
 function closeModal(){ document.getElementById('modalBackdrop').classList.remove('open'); }
 
+function renderDrawer(){
+  const items = [
+    {tab:'debts', ic:'card', t:'Central de Dívidas', d:'Snowball, avalanche e simulações'},
+    {tab:'achievements', ic:'medal', t:'Conquistas', d:'Nível, sequência e medalhas'},
+    {tab:'settings', ic:'settings', t:'Configurações', d:'Perfil, privacidade e dados'},
+  ];
+  document.getElementById('drawerPanel').innerHTML = `
+    <div class="drawer-head">
+      <div class="brand-mark">Z</div>
+      <div><div class="drawer-name">${esc(state.profile.name||'Bem-vindo(a)')}</div><div class="drawer-sub">ZENITE · v1.0</div></div>
+    </div>
+    ${items.map(i=>`<div class="drawer-item" data-action="goto-drawer" data-tab="${i.tab}">
+      <div class="ic">${iconSVG(i.ic,17)}</div>
+      <div><div class="t">${i.t}</div><div class="d">${i.d}</div></div>
+    </div>`).join('')}
+  `;
+}
+function openDrawer(){ renderDrawer(); document.getElementById('drawerBackdrop').classList.add('open'); }
+function closeDrawer(){ document.getElementById('drawerBackdrop').classList.remove('open'); }
+
 function openTxForm(existing){
   const isEdit = !!existing;
   const t = existing || { type:'expense', amount:'', category:'Outros', envelopeId:'', date: todayISO(), note:'' };
@@ -1355,6 +1387,10 @@ document.addEventListener('click', (e)=>{
     case 'tx-filter':
       state.ui.txFilter = el.dataset.f; render(); break;
     case 'close-modal': closeModal(); break;
+    case 'open-drawer': openDrawer(); break;
+    case 'close-drawer': closeDrawer(); break;
+    case 'goto-drawer':
+      closeDrawer(); state.ui.tab = el.dataset.tab; save(); render(); window.scrollTo(0,0); break;
     case 'new-tx': openTxForm(); break;
     case 'edit-tx': openTxForm(state.transactions.find(t=>t.id===el.dataset.id)); break;
     case 'delete-tx':
@@ -1439,6 +1475,7 @@ document.getElementById('fabAdd').addEventListener('click', ()=>{
 });
 
 document.getElementById('modalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+document.getElementById('drawerBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='drawerBackdrop') closeDrawer(); });
 
 document.addEventListener('submit', (e)=>{
   if(e.target.id==='txForm'){
