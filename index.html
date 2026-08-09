@@ -639,11 +639,15 @@ function screenDashboard(){
   ${primaryGoal ? goalMiniCard(primaryGoal) : `<div class="card"><div class="empty" style="padding:20px 10px;"><div class="ic">◎</div><div class="t">Crie sua primeira meta financeira</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-goal">Criar meta</button></div></div>`}
 
   <div class="card">
-    <div class="card-row" style="margin-bottom:8px;">
-      <div class="card-title" style="margin:0;">ORÇAMENTO — categorias de atenção</div>
+    <div class="card-row" style="margin-bottom:2px;">
+      <div class="card-head"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Orçamento — categorias de atenção</div></div>
       <span class="link-btn" data-action="goto" data-tab="budget">ver tudo</span>
     </div>
-    ${topEnvelopes.length ? topEnvelopes.map(e=>envelopeRow(e)).join('') : `<div class="empty" style="padding:16px;"><div class="t">Configure envelopes de orçamento na aba Orçamento</div></div>`}
+    ${topEnvelopes.length ? `
+      <div style="position:relative;margin-top:8px;"><canvas id="chartAttn"></canvas></div>
+      <div class="link-btn" data-action="toggle-table" data-t="attn" style="margin-top:10px;display:inline-block;">ver tabela</div>
+      <div id="table-attn" style="display:none;"></div>
+    ` : `<div class="empty" style="padding:16px;"><div class="t">Configure envelopes de orçamento na aba Orçamento</div></div>`}
   </div>
 
   <div class="card">
@@ -670,20 +674,6 @@ function goalMiniCard(g){
     </div>
     <div class="bar-track"><div class="bar-fill brand" style="width:${pct*100}%"></div></div>
     ${needed>0?`<div class="section-sub" style="margin-top:10px;">Aporte recomendado: <b style="color:var(--text)">${fmtBRL(needed)}/mês</b> até ${fmtDate(g.deadline)}</div>`:''}
-  </div>`;
-}
-
-function envelopeRow(e){
-  const spent = envelopeSpent(e.id,0);
-  const pct = e.budget>0 ? spent/e.budget : 0;
-  const status = statusForPct(pct);
-  return `<div class="env-item" data-action="goto" data-tab="budget">
-    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${iconSVG(e.icon,20)}</div>
-    <div class="env-body">
-      <div class="env-top"><span>${esc(e.name)}</span><span class="pct" style="color:var(--${status==='good'?'good-text':status})">${(pct*100).toFixed(0)}%</span></div>
-      <div class="bar-track"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
-      <div class="env-meta"><span>${money(spent)}</span><span>de ${money(e.budget)}</span></div>
-    </div>
   </div>`;
 }
 
@@ -861,6 +851,59 @@ function roundRectTop(ctx,x,y,w,h,r){
   ctx.lineTo(x+w, y+h); ctx.lineTo(x,y+h); ctx.closePath();
 }
 function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function roundRectFull(ctx,x,y,w,h,r){
+  r = Math.min(r, h/2, Math.max(w,0.01)/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawAttentionChart(){
+  const canvas = document.getElementById('chartAttn'); if(!canvas) return;
+  const list = [...state.envelopes].sort((a,b)=> (envelopeSpent(b.id,0)/(b.budget||1)) - (envelopeSpent(a.id,0)/(a.budget||1)) ).slice(0,4);
+  const rowH = 40, padTop = 4;
+  const h = list.length*rowH + padTop;
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth;
+  canvas.style.height = h+'px';
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const barH = 8, barMaxW = w - 46;
+  window._attnPoints = [];
+  list.forEach((e,i)=>{
+    const spent = envelopeSpent(e.id,0);
+    const pct = e.budget>0 ? spent/e.budget : 0;
+    const status = statusForPct(pct);
+    const color = getCss('--'+(status==='good'?'good-text':status));
+    const y = padTop + i*rowH;
+
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '700 12px Inter'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(e.name, 0, y + 11);
+    ctx.fillStyle = color; ctx.font = '800 12px Inter'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(pct*100) + '%', w, y + 11);
+
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    roundRectFull(ctx, 0, y + 17, barMaxW, barH, barH/2); ctx.fill();
+    const fillW = clamp(pct, 0, 1) * barMaxW;
+    if(fillW > 0){
+      ctx.fillStyle = color;
+      roundRectFull(ctx, 0, y + 17, Math.max(fillW, barH), barH, barH/2); ctx.fill();
+    }
+    window._attnPoints.push({ y0: y, y1: y+rowH, e, spent, pct });
+  });
+
+  renderTable('attn', ['Categoria','Gasto','Orçamento','%'], list.map(e=>{
+    const spent = envelopeSpent(e.id,0);
+    const pct = e.budget>0 ? spent/e.budget : 0;
+    return [e.name, fmtBRL(spent), fmtBRL(e.budget), Math.round(pct*100)+'%'];
+  }));
+}
 
 function drawDonut(){
   const canvas = document.getElementById('chartDonut'); if(!canvas) return;
@@ -1041,9 +1084,28 @@ function screenSettings(){
 =================================================================== */
 function afterRenderHooks(){
   if(state.ui.tab==='reports'){ drawBarChart(); drawDonut(); attachChartTooltips(); }
+  if(state.ui.tab==='dashboard'){ drawAttentionChart(); attachAttentionTooltip(); }
   if(state.ui.tab==='settings'){
     document.getElementById('importFile').addEventListener('change', handleImport);
   }
+}
+
+function attachAttentionTooltip(){
+  const canvas = document.getElementById('chartAttn');
+  if(!canvas) return;
+  let tip;
+  canvas.addEventListener('mousemove', e=>{
+    const rect = canvas.getBoundingClientRect();
+    const y = e.clientY-rect.top;
+    const pt = (window._attnPoints||[]).find(p=>y>=p.y0 && y<p.y1);
+    if(!tip){ tip=document.createElement('div'); tip.className='tooltip-box'; canvas.parentElement.appendChild(tip); }
+    if(pt){
+      tip.style.display='block';
+      tip.style.left = '0px'; tip.style.top = (pt.y0-2)+'px';
+      tip.innerHTML = `<b>${esc(pt.e.name)}</b><br>${fmtBRL(pt.spent)} de ${fmtBRL(pt.e.budget)} (${Math.round(pt.pct*100)}%)`;
+    } else if(tip) tip.style.display='none';
+  });
+  canvas.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
 }
 
 function attachChartTooltips(){
