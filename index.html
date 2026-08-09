@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <title>ZENITE — Seu consultor financeiro particular</title>
 <meta name="description" content="ZENITE: o sistema operacional da sua vida financeira. Orçamento inteligente, metas, dívidas e insights automáticos." />
-<meta name="theme-color" content="#0a0a0c" />
+<meta name="theme-color" content="#05070c" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <link rel="icon" href="icons/favicon.ico" />
@@ -16,18 +16,18 @@
 /* ================= DESIGN SYSTEM ================= */
 :root{
   color-scheme: dark;
-  --page:#08080a;
-  --bg-grad-1: radial-gradient(1200px 600px at 12% -10%, rgba(124,108,255,.16), transparent 60%),
-               radial-gradient(1000px 500px at 100% 0%, rgba(34,211,238,.10), transparent 55%),
-               radial-gradient(900px 700px at 50% 120%, rgba(16,185,129,.08), transparent 55%);
-  --surface: rgba(255,255,255,.045);
-  --surface-2: rgba(255,255,255,.07);
-  --surface-solid:#141417;
-  --border: rgba(255,255,255,.09);
-  --border-soft: rgba(255,255,255,.06);
+  --page:#05070c;
+  --bg-grad-1: radial-gradient(1200px 600px at 12% -10%, rgba(34,211,238,.14), transparent 60%),
+               radial-gradient(1000px 500px at 100% 0%, rgba(124,108,255,.14), transparent 55%),
+               radial-gradient(900px 700px at 50% 120%, rgba(16,185,129,.07), transparent 55%);
+  --surface: rgba(19,26,41,.55);
+  --surface-2: rgba(27,37,56,.65);
+  --surface-solid:#121a29;
+  --border: rgba(148,180,214,.14);
+  --border-soft: rgba(148,180,214,.09);
   --text:#f6f6f8;
-  --text-dim:#9a9ba3;
-  --text-mute:#66676f;
+  --text-dim:#9aa5b4;
+  --text-mute:#63707f;
   --brand-a:#8b7bff;
   --brand-b:#22d3ee;
   --brand-grad: linear-gradient(135deg, var(--brand-a), var(--brand-b));
@@ -37,6 +37,8 @@
   --warning:#fab219;
   --serious:#ec835a;
   --critical:#ef4a4a;
+  --glow-cyan: rgba(34,211,238,.4);
+  --card-navy: linear-gradient(165deg, rgba(24,33,53,.78), rgba(9,13,22,.85));
   --c1:#3987e5; --c2:#d95926; --c3:#1baf7a; --c4:#c98500;
   --c5:#d55181; --c6:#2fbf4f; --c7:#9085e9; --c8:#e66767;
   --radius-lg:22px; --radius-md:16px; --radius-sm:11px;
@@ -66,7 +68,7 @@ input,select,textarea{ font-family:inherit; }
 #app{ max-width:560px; margin:0 auto; min-height:100vh; padding-bottom: calc(92px + var(--safe-bottom)); position:relative; }
 .topbar{
   position:sticky; top:0; z-index:20; padding: calc(16px + var(--safe-top)) 18px 12px;
-  background: linear-gradient(to bottom, rgba(8,8,10,.92) 60%, rgba(8,8,10,0));
+  background: linear-gradient(to bottom, rgba(5,7,12,.92) 60%, rgba(5,7,12,0));
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   display:flex; align-items:center; justify-content:space-between; gap:10px;
 }
@@ -92,9 +94,14 @@ main{ padding: 6px 18px 24px; }
   padding:18px; box-shadow: var(--shadow-card); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   position:relative; overflow:hidden;
 }
+.card.glow{
+  background: var(--card-navy);
+  border-color: rgba(94,234,212,.22);
+  box-shadow: 0 0 0 1px rgba(34,211,238,.10), 0 0 70px -18px var(--glow-cyan), 0 24px 60px rgba(0,0,0,.55);
+}
 .card.glow::before{
   content:""; position:absolute; inset:-1px; border-radius:inherit; padding:1px;
-  background: linear-gradient(135deg, rgba(139,123,255,.5), rgba(34,211,238,.15), transparent 60%);
+  background: linear-gradient(135deg, rgba(34,211,238,.75), rgba(139,123,255,.4), rgba(34,211,238,.08) 70%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude; pointer-events:none;
 }
@@ -104,24 +111,33 @@ main{ padding: 6px 18px 24px; }
 .section-sub{ font-size:12.5px; color: var(--text-mute); margin: -8px 2px 0; }
 .link-btn{ font-size:12.5px; font-weight:700; color: var(--brand-b); cursor:pointer; }
 
+/* card header with icon badge, à la referência */
+.card-head{ display:flex; align-items:center; gap:10px; }
+.card-head .ic{ width:30px; height:30px; border-radius:10px; background: rgba(34,211,238,.12); border:1px solid rgba(34,211,238,.28); color:#5eead4; display:flex; align-items:center; justify-content:center; flex:0 0 auto; box-shadow: 0 0 16px rgba(34,211,238,.18); }
+.card-head .t{ font-weight:800; font-size:14.5px; letter-spacing:.01em; }
+
 /* hero balance */
 .hero{ padding:22px 20px 20px; }
 .hero-label{ font-size:12.5px; color: var(--text-dim); font-weight:600; }
 .hero-amount{ font-size:38px; font-weight:800; margin:6px 0 14px; line-height:1.05; }
 .hero-amount.neg{ color: var(--critical); }
-.hero-split{ display:flex; gap:10px; }
-.hero-pill{ flex:1; background: var(--surface-2); border:1px solid var(--border-soft); border-radius: var(--radius-md); padding:11px 12px; }
-.hero-pill .lbl{ font-size:11px; color: var(--text-mute); display:flex; align-items:center; gap:5px; font-weight:600;}
-.hero-pill .val{ font-size:16px; font-weight:700; margin-top:3px; }
 .dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+
+/* linha de estatísticas com divisores, à la referência */
+.divider-stats{ display:flex; border:1px solid rgba(148,180,214,.16); border-radius: var(--radius-md); overflow:hidden; background: rgba(255,255,255,.02); }
+.divider-stats .dstat{ flex:1; padding:12px 6px 12px 12px; min-width:0; }
+.divider-stats .dstat + .dstat{ border-left:1px solid rgba(148,180,214,.16); }
+.divider-stats .dstat .lbl{ display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-mute); font-weight:700; text-transform:uppercase; letter-spacing:.02em; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.divider-stats .dstat .val{ font-size:13px; font-weight:800; line-height:1.25; word-break:break-word; }
 
 /* stat grid */
 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
-.stat-tile{ padding:14px; }
-.stat-tile .num{ font-size:21px; font-weight:800; margin-top:2px; }
-.stat-tile .lbl{ font-size:11.5px; color:var(--text-dim); font-weight:600; }
-.stat-tile .sub{ font-size:10.5px; color: var(--text-mute); margin-top:2px; }
+.stat-tile{ padding:14px; background: var(--card-navy); border-color: rgba(148,180,214,.14); }
+.stat-tile .ic{ width:26px; height:26px; border-radius:8px; background: rgba(34,211,238,.1); border:1px solid rgba(34,211,238,.22); color:#5eead4; display:flex; align-items:center; justify-content:center; margin-bottom:9px; }
+.stat-tile .num{ font-size:19px; font-weight:800; margin-top:2px; }
+.stat-tile .lbl{ font-size:10.5px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
+.stat-tile .sub{ font-size:10.5px; color: var(--text-mute); margin-top:3px; }
 
 /* progress bars */
 .bar-track{ height:8px; border-radius:99px; background: rgba(255,255,255,.08); overflow:hidden; position:relative; }
@@ -601,20 +617,21 @@ function screenDashboard(){
   return `
   <div class="card glow hero">
     <div class="card-row">
-      <div class="hero-label">SALDO DO MÊS</div>
+      <div class="card-head"><div class="ic">${iconSVG('chart',17)}</div><div class="t">Saldo do mês</div></div>
       <span class="badge ${m.score>=70?'good':m.score>=45?'warning':'critical'}">Score ${m.score}</span>
     </div>
     <div class="hero-amount ${m.savings<0?'neg':''}">${money(m.savings)}</div>
-    <div class="hero-split">
-      <div class="hero-pill"><div class="lbl"><span class="dot" style="background:var(--good-text)"></span>Receitas</div><div class="val">${money(m.income)}</div></div>
-      <div class="hero-pill"><div class="lbl"><span class="dot" style="background:var(--c8)"></span>Despesas</div><div class="val">${money(m.expenses)}</div></div>
+    <div class="divider-stats">
+      <div class="dstat"><div class="lbl"><span class="dot" style="background:var(--good-text)"></span>Receitas</div><div class="val" style="color:var(--good-text)">${money(m.income)}</div></div>
+      <div class="dstat"><div class="lbl"><span class="dot" style="background:var(--brand-b)"></span>Saldo</div><div class="val" style="color:${m.savings>=0?'#fff':'var(--critical)'}">${money(m.savings)}</div></div>
+      <div class="dstat"><div class="lbl"><span class="dot" style="background:var(--c8)"></span>Despesas</div><div class="val" style="color:var(--c8)">${money(m.expenses)}</div></div>
     </div>
   </div>
 
   <div class="grid3">
-    <div class="card stat-tile"><div class="lbl">DISPONÍVEL / DIA</div><div class="num">${money(m.availableToday)}</div><div class="sub">${m.daysLeft} dias restantes</div></div>
-    <div class="card stat-tile"><div class="lbl">ECONOMIA</div><div class="num" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div><div class="sub">da renda</div></div>
-    <div class="card stat-tile"><div class="lbl">NÍVEL</div><div class="num">Lv.${lvl.level}</div><div class="sub">${lvl.xp} XP</div></div>
+    <div class="card stat-tile"><div class="ic">${iconSVG('income',15)}</div><div class="lbl">Disponível / dia</div><div class="num">${money(m.availableToday)}</div><div class="sub">${m.daysLeft} dias restantes</div></div>
+    <div class="card stat-tile"><div class="ic">${iconSVG('piggy',15)}</div><div class="lbl">Economia</div><div class="num" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div><div class="sub">da renda</div></div>
+    <div class="card stat-tile"><div class="ic">${iconSVG('shield',15)}</div><div class="lbl">Nível</div><div class="num">Lv.${lvl.level}</div><div class="sub">${lvl.xp} XP</div></div>
   </div>
 
   ${insights.map(i=>`<div class="insight"><div class="ic">${i.ic}</div><div class="tx">${i.text}</div></div>`).join('')}
