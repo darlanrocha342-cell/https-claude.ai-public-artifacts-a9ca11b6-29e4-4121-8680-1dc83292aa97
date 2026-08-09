@@ -136,13 +136,14 @@ main{ padding: 6px 18px 24px; }
 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 
 /* progress bars */
-.bar-track{ height:8px; border-radius:99px; background: rgba(255,255,255,.08); overflow:hidden; position:relative; }
-.bar-fill{ height:100%; border-radius:99px; transition: width .5s cubic-bezier(.2,.8,.2,1); }
-.bar-fill.good{ background: linear-gradient(90deg,#1fd35a,#2fbf4f); }
-.bar-fill.warning{ background: linear-gradient(90deg,#fab219,#e89a10); }
-.bar-fill.serious{ background: linear-gradient(90deg,#ec835a,#e06a3d); }
-.bar-fill.critical{ background: linear-gradient(90deg,#ef4a4a,#d03b3b); }
-.bar-fill.brand{ background: var(--brand-grad); }
+.bar-track{ height:8px; border-radius:99px; background: rgba(255,255,255,.08); overflow:visible; position:relative; }
+.bar-track.lg{ height:10px; }
+.bar-fill{ height:100%; border-radius:99px; transition: width .5s cubic-bezier(.2,.8,.2,1); position:relative; }
+.bar-fill.good{ background: linear-gradient(90deg,#1fd35a,#2fbf4f); box-shadow: 0 0 8px rgba(31,211,90,.4); }
+.bar-fill.warning{ background: linear-gradient(90deg,#fab219,#e89a10); box-shadow: 0 0 10px rgba(250,178,25,.45); }
+.bar-fill.serious{ background: linear-gradient(90deg,#ec835a,#e06a3d); box-shadow: 0 0 10px rgba(236,131,90,.45); }
+.bar-fill.critical{ background: linear-gradient(90deg,#ef4a4a,#d03b3b); box-shadow: 0 0 12px rgba(239,74,74,.55); }
+.bar-fill.brand{ background: var(--brand-grad); box-shadow: 0 0 10px rgba(139,123,255,.4); }
 
 /* envelopes */
 .env-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border-soft); }
@@ -159,12 +160,12 @@ main{ padding: 6px 18px 24px; }
 .chip.on{ background: rgba(139,123,255,.16); border-color: rgba(139,123,255,.4); color:#c9c1ff; }
 .chip-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
 .chip-row::-webkit-scrollbar{ display:none; }
-.badge{ font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.03em; }
-.badge.good{ background: rgba(31,211,90,.15); color: var(--good-text); }
-.badge.warning{ background: rgba(250,178,25,.15); color: var(--warning); }
-.badge.serious{ background: rgba(236,131,90,.16); color: var(--serious); }
-.badge.critical{ background: rgba(239,74,74,.15); color: var(--critical); }
-.badge.neutral{ background: rgba(255,255,255,.08); color: var(--text-dim); }
+.badge{ font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:99px; text-transform:uppercase; letter-spacing:.03em; border:1px solid transparent; }
+.badge.good{ background: rgba(31,211,90,.13); color: var(--good-text); border-color: rgba(31,211,90,.35); }
+.badge.warning{ background: rgba(250,178,25,.13); color: var(--warning); border-color: rgba(250,178,25,.4); box-shadow: 0 0 10px rgba(250,178,25,.2); }
+.badge.serious{ background: rgba(236,131,90,.15); color: var(--serious); border-color: rgba(236,131,90,.4); box-shadow: 0 0 10px rgba(236,131,90,.2); }
+.badge.critical{ background: rgba(239,74,74,.15); color: var(--critical); border-color: rgba(239,74,74,.45); box-shadow: 0 0 12px rgba(239,74,74,.3); }
+.badge.neutral{ background: rgba(255,255,255,.08); color: var(--text-dim); border-color: rgba(255,255,255,.12); }
 
 /* insight */
 .insight{ display:flex; gap:12px; padding:14px; border-radius: var(--radius-md); background: var(--brand-grad-soft); border:1px solid rgba(139,123,255,.25); }
@@ -723,14 +724,18 @@ function screenTransactions(){
 /* ---------- ORÇAMENTO ---------- */
 function screenBudget(){
   const m = computeMetrics();
+  const totalPct = m.totalBudget ? m.spentAll/m.totalBudget : 0;
   return `
-  <div class="card">
-    <div class="card-row"><div class="card-title" style="margin:0;">ORÇAMENTO TOTAL DO MÊS</div></div>
-    <div class="hero-amount" style="font-size:26px;margin:6px 0 8px;">${money(m.spentAll)} <span style="font-size:14px;color:var(--text-mute);font-weight:600;">/ ${fmtBRL(m.totalBudget)}</span></div>
-    <div class="bar-track"><div class="bar-fill ${statusForPct(m.totalBudget?m.spentAll/m.totalBudget:0)}" style="width:${clamp(m.totalBudget? m.spentAll/m.totalBudget*100:0,0,100)}%"></div></div>
+  <div class="card glow">
+    <div class="card-head" style="margin-bottom:10px;"><div class="ic">${iconSVG('chart',16)}</div><div class="t">Orçamento total do mês</div></div>
+    <div class="hero-amount" style="font-size:26px;margin:0 0 10px;">${money(m.spentAll)} <span style="font-size:14px;color:var(--text-mute);font-weight:600;">/ ${fmtBRL(m.totalBudget)}</span></div>
+    <div class="bar-track lg"><div class="bar-fill ${statusForPct(totalPct)}" style="width:${clamp(totalPct*100,0,100)}%"></div></div>
   </div>
-  <div class="card">
-    <div class="card-row" style="margin-bottom:6px;"><div class="card-title" style="margin:0;">ENVELOPES</div><span class="link-btn" data-action="new-envelope">+ novo</span></div>
+  <div class="card glow">
+    <div class="card-row" style="margin-bottom:6px;">
+      <div class="card-head"><div class="ic">${iconSVG('card',16)}</div><div class="t">Envelopes</div></div>
+      <span class="link-btn" data-action="new-envelope">+ novo</span>
+    </div>
     ${state.envelopes.length ? state.envelopes.map(e=>envelopeRowEditable(e)).join('') : `<div class="empty"><div class="ic">▣</div><div class="t">Crie envelopes para organizar seus gastos por categoria</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-envelope">Criar envelope</button></div>`}
   </div>`;
 }
@@ -739,10 +744,10 @@ function envelopeRowEditable(e){
   const pct = e.budget>0 ? spent/e.budget : 0;
   const status = statusForPct(pct);
   return `<div class="env-item">
-    <div class="env-ic" style="background:${e.color}22;color:${e.color};">${iconSVG(e.icon,20)}</div>
+    <div class="env-ic" style="background:${e.color}22;color:${e.color};box-shadow:0 0 14px ${e.color}40;">${iconSVG(e.icon,20)}</div>
     <div class="env-body" data-action="edit-envelope" data-id="${e.id}" style="cursor:pointer;">
       <div class="env-top"><span>${esc(e.name)}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
-      <div class="bar-track"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
+      <div class="bar-track lg"><div class="bar-fill ${status}" style="width:${clamp(pct*100,0,100)}%"></div></div>
       <div class="env-meta"><span>${money(spent)} de ${money(e.budget)}</span><span>${(pct*100).toFixed(0)}%</span></div>
     </div>
   </div>`;
