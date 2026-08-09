@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<title>ZENITE — Seu consultor financeiro particular</title>
-<meta name="description" content="ZENITE: o sistema operacional da sua vida financeira. Orçamento inteligente, metas, dívidas e insights automáticos." />
+<title>ATLAS — Seu assessor financeiro com inteligência artificial</title>
+<meta name="description" content="ATLAS: seu assessor financeiro com inteligência artificial. Orçamento inteligente, metas, dívidas e insights automáticos." />
 <meta name="theme-color" content="#05070c" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -286,6 +286,13 @@ main{ padding: 6px 18px 24px; }
 .color-pick{ display:flex; flex-wrap:wrap; gap:8px; }
 .color-pick button{ width:28px; height:28px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
 .color-pick button.active{ border-color: var(--text); box-shadow: 0 0 0 2px var(--surface-solid); }
+.theme-row{ display:flex; align-items:center; gap:14px; padding:12px; border-radius:14px; background:var(--surface-2); border:1px solid var(--border-soft); margin-bottom:10px; }
+.theme-row .t{ font-size:14px; font-weight:700; }
+.theme-row .d{ font-size:11.5px; color:var(--text-mute); margin-top:1px; }
+.theme-swatch{ -webkit-appearance:none; appearance:none; width:46px; height:46px; border-radius:13px; border:1px solid var(--border); padding:0; cursor:pointer; background:var(--surface); flex:0 0 auto; }
+.theme-swatch::-webkit-color-swatch-wrapper{ padding:2px; }
+.theme-swatch::-webkit-color-swatch{ border:none; border-radius:11px; }
+.theme-swatch::-moz-color-swatch{ border:none; border-radius:11px; }
 
 /* empty state */
 .empty{ text-align:center; padding:40px 16px; color: var(--text-mute); }
@@ -357,12 +364,12 @@ canvas{ display:block; width:100%; max-width:100%; }
 <script>
 'use strict';
 /* ===================================================================
-   ZENITE — Sistema Operacional Financeiro Pessoal
+   ATLAS — Assessor Financeiro com Inteligência Artificial
    Armazenamento local (privacidade em primeiro lugar). Sem servidor.
 =================================================================== */
 
 /* ---------- estado & persistência ---------- */
-const STORAGE_KEY = 'zenite_state_v1';
+const STORAGE_KEY = 'atlas_state_v1';
 const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const todayISO = () => new Date().toISOString().slice(0,10);
 
@@ -405,6 +412,7 @@ const ICONS = {
   sun:    '<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>',
   moon:   '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>',
   monitor:'<rect x="3" y="4" width="18" height="12" rx="1.5"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/>',
+  palette:'<path d="M12 3a9 9 0 1 0 0 18c1.5 0 2.5-1 2.5-2.3 0-.6-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4A9 9 0 0 0 12 3z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/>',
 };
 function iconSVG(key, size){
   size = size || 20;
@@ -443,7 +451,7 @@ function defaultState(){
     profile: { name:'', currency:'BRL', createdAt: todayISO() },
     security: { pin: null },
     privacy: { hideValues:false },
-    appearance: { theme: 'dark' },
+    appearance: { theme: 'dark', customColors: {} },
     income: { monthlyBase: 0 },
     envelopes: [],
     transactions: [],
@@ -456,6 +464,7 @@ function defaultState(){
 
 let state = load();
 applyTheme();
+applyCustomColors();
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -690,7 +699,7 @@ function topbarHTML(){
     const hour = new Date().getHours();
     const greet = hour<12?'Bom dia':hour<18?'Boa tarde':'Boa noite';
     return `<div class="topbar">
-      <div class="brand"><div class="brand-mark">Z</div><div><div style="font-size:11.5px;color:var(--text-mute);font-weight:600;">${greet},</div><div class="brand-name">${esc(state.profile.name||'bem-vindo')}</div></div></div>
+      <div class="brand"><div class="brand-mark">A</div><div><div style="font-size:11.5px;color:var(--text-mute);font-weight:600;">${greet},</div><div class="brand-name">${esc(state.profile.name||'bem-vindo')}</div></div></div>
       <div class="topbar-actions">
         <button class="icon-btn ${state.gamification.streak>0?'active':''}" data-action="goto" data-tab="achievements" title="Sequência">🔥<span style="font-size:10px;margin-left:2px;">${state.gamification.streak||0}</span></button>
         <button class="icon-btn ${state.privacy.hideValues?'active':''}" data-action="toggle-privacy" title="Ocultar valores">${state.privacy.hideValues?'🙈':'👁️'}</button>
@@ -701,7 +710,7 @@ function topbarHTML(){
   const isDrawerScreen = DRAWER_TABS.includes(state.ui.tab);
   return `<div class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      ${isDrawerScreen ? `<button class="icon-btn" data-action="goto" data-tab="dashboard">←</button>` : `<div class="brand-mark">Z</div>`}
+      ${isDrawerScreen ? `<button class="icon-btn" data-action="goto" data-tab="dashboard">←</button>` : `<div class="brand-mark">A</div>`}
       <div class="brand-name" style="font-size:17px;">${title}</div>
     </div>
     <div class="topbar-actions">
@@ -1381,7 +1390,7 @@ function screenSettings(){
       <button class="btn btn-danger btn-block" data-action="reset-data">Apagar todos os dados</button>
     </div>
   </div>
-  <div class="section-sub" style="text-align:center;margin-top:6px;">ZENITE v1.0 · Dados armazenados apenas neste dispositivo</div>
+  <div class="section-sub" style="text-align:center;margin-top:6px;">ATLAS v1.0 · Dados armazenados apenas neste dispositivo</div>
   `;
 }
 
@@ -1486,8 +1495,8 @@ function renderDrawer(){
   const theme = state.appearance.theme;
   document.getElementById('drawerPanel').innerHTML = `
     <div class="drawer-brand">
-      <div class="drawer-logo">Z</div>
-      <div class="drawer-tagline">Sistema operacional<br/>da sua vida financeira</div>
+      <div class="drawer-logo">A</div>
+      <div class="drawer-tagline">Seu assessor financeiro<br/>com inteligência artificial</div>
     </div>
     <div class="drawer-divider"></div>
     <div class="drawer-list">
@@ -1495,6 +1504,10 @@ function renderDrawer(){
         <div class="ic">${iconSVG(i.ic,17)}</div>
         <div><div class="t">${i.t}</div><div class="d">${i.d}</div></div>
       </div>`).join('')}
+      <div class="drawer-item" data-action="open-theme">
+        <div class="ic">${iconSVG('palette',17)}</div>
+        <div><div class="t">Tema</div><div class="d">Cores personalizadas do app</div></div>
+      </div>
     </div>
     <div class="drawer-spacer"></div>
     <div class="drawer-theme">
@@ -1507,7 +1520,7 @@ function renderDrawer(){
     </div>
     <div class="drawer-footer">
       <div class="drawer-footer-name">${esc(state.profile.name||'Bem-vindo(a)')}</div>
-      <div class="drawer-footer-sub">ZENITE · Consultor financeiro particular</div>
+      <div class="drawer-footer-sub">ATLAS · Seu assessor financeiro com IA</div>
     </div>
   `;
 }
@@ -1529,6 +1542,72 @@ if(window.matchMedia){
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{
     if(state.appearance.theme==='system') applyTheme();
   });
+}
+
+/* ---------- editor de cores personalizadas ---------- */
+function hexToRgba(hex, alpha){
+  hex = hex.replace('#','');
+  const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function shade(hex, amt){
+  hex = hex.replace('#','');
+  const r = clamp(parseInt(hex.substring(0,2),16)+amt,0,255);
+  const g = clamp(parseInt(hex.substring(2,4),16)+amt,0,255);
+  const b = clamp(parseInt(hex.substring(4,6),16)+amt,0,255);
+  return `rgb(${r},${g},${b})`;
+}
+function currentThemeIsLight(){ return document.documentElement.getAttribute('data-theme')==='light'; }
+function themeDefaultColor(key){
+  const light = currentThemeIsLight();
+  if(key==='cards') return light ? '#ffffff' : '#121a29';
+  return light ? '#f2f4fa' : '#05070c';
+}
+function applyCustomColors(){
+  const cc = state.appearance.customColors || {};
+  const root = document.documentElement.style;
+  if(cc.background) root.setProperty('--page', cc.background);
+  else root.removeProperty('--page');
+
+  if(cc.cards){
+    root.setProperty('--surface-solid', cc.cards);
+    root.setProperty('--surface', hexToRgba(cc.cards,.55));
+    root.setProperty('--surface-2', hexToRgba(cc.cards,.75));
+    root.setProperty('--sheet-bg', cc.cards);
+    root.setProperty('--drawer-bg', cc.cards);
+    root.setProperty('--card-navy', `linear-gradient(165deg, ${shade(cc.cards,14)}, ${shade(cc.cards,-10)})`);
+  } else {
+    ['--surface-solid','--surface','--surface-2','--sheet-bg','--drawer-bg','--card-navy'].forEach(p=>root.removeProperty(p));
+  }
+
+  if(cc.bars){
+    root.setProperty('--scrim-strong', hexToRgba(cc.bars,.92));
+    root.setProperty('--scrim-clear', hexToRgba(cc.bars,0));
+    root.setProperty('--tabbar-bg', hexToRgba(cc.bars,.85));
+  } else {
+    ['--scrim-strong','--scrim-clear','--tabbar-bg'].forEach(p=>root.removeProperty(p));
+  }
+}
+function openThemeModal(){
+  const cc = state.appearance.customColors || {};
+  const val = k => cc[k] || themeDefaultColor(k);
+  openModal(`
+    <div class="modal-title"><span>Tema do Painel</span><span class="icon-btn" data-action="close-modal" style="width:32px;height:32px;">✕</span></div>
+    <p class="section-sub" style="margin:-4px 0 16px;">Personalize as cores do sistema. As mudanças aplicam na hora e ficam salvas.</p>
+    <div class="theme-row">
+      <input type="color" class="theme-swatch" value="${val('bars')}" data-action="set-custom-color" data-k="bars" />
+      <div><div class="t">Cor das Faixas</div><div class="d">Barra de cima e barra de baixo (celular)</div></div>
+    </div>
+    <div class="theme-row">
+      <input type="color" class="theme-swatch" value="${val('cards')}" data-action="set-custom-color" data-k="cards" />
+      <div><div class="t">Cor dos Cards</div><div class="d">Cards, painéis e menu lateral</div></div>
+    </div>
+    <div class="theme-row">
+      <input type="color" class="theme-swatch" value="${val('background')}" data-action="set-custom-color" data-k="background" />
+      <div><div class="t">Cor de Fundo</div><div class="d">Fundo geral por trás de tudo</div></div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-block" data-action="reset-custom-colors" style="margin-top:4px;">Restaurar cores padrão</button>
+  `);
 }
 
 function openTxForm(existing){
@@ -1714,7 +1793,7 @@ document.addEventListener('click', (e)=>{
     case 'export-data': {
       const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'zenite-backup-'+todayISO()+'.json'; a.click();
+      a.href = URL.createObjectURL(blob); a.download = 'atlas-backup-'+todayISO()+'.json'; a.click();
       break;
     }
     case 'reset-data': {
@@ -1730,6 +1809,10 @@ document.addEventListener('click', (e)=>{
     case 'set-pin': openPinSetup(); break;
     case 'remove-pin': state.security.pin=null; save(); render(); toast('PIN removido'); break;
     case 'set-theme': state.appearance.theme = el.dataset.v; save(); applyTheme(); renderDrawer(); break;
+    case 'open-theme': closeDrawer(); openThemeModal(); break;
+    case 'reset-custom-colors':
+      state.appearance.customColors = {}; save(); applyCustomColors(); openThemeModal(); toast('Cores restauradas');
+      break;
   }
 
   // icon/color pickers inside forms
@@ -1833,6 +1916,12 @@ document.addEventListener('submit', (e)=>{
 
 document.addEventListener('input', (e)=>{
   if(e.target.id==='debtExtraInput'){ state.ui.debtExtra = parseFloat(e.target.value)||0; save(); render(); }
+  if(e.target.matches('[data-action="set-custom-color"]')){
+    const k = e.target.dataset.k;
+    state.appearance.customColors = state.appearance.customColors || {};
+    state.appearance.customColors[k] = e.target.value;
+    save(); applyCustomColors();
+  }
 });
 
 function handleImport(e){
@@ -1865,7 +1954,7 @@ function openPinSetup(){
 function renderPinScreen(title, onComplete, isSetup){
   const el = document.getElementById('pinScreen');
   el.innerHTML = `<div class="pin-screen">
-    <div class="brand-mark" style="width:52px;height:52px;font-size:22px;">Z</div>
+    <div class="brand-mark" style="width:52px;height:52px;font-size:22px;">A</div>
     <div style="font-weight:800;font-size:16px;">${title}</div>
     <div class="pin-dots" id="pinDots">${'0000'.split('').map(()=>'<span class="pin-dot"></span>').join('')}</div>
     <div class="pin-pad">

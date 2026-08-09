@@ -1,8 +1,8 @@
-# ZENITE
+# ATLAS
 
-O sistema operacional da sua vida financeira. Não é só um controle de gastos —
-o app pensa antes de você: gera orçamento automático a partir da sua renda,
-projeta suas metas, prioriza suas dívidas e te dá recomendações a cada
+Seu assessor financeiro com inteligência artificial. Não é só um controle de
+gastos — o app pensa antes de você: gera orçamento automático a partir da sua
+renda, projeta suas metas, prioriza suas dívidas e te dá recomendações a cada
 lançamento.
 
 100% local-first: todos os dados ficam salvos apenas no seu dispositivo
@@ -31,6 +31,8 @@ lançamento.
   anteriores e sugere economias concretas em R$/ano.
 - **Privacidade** — botão para ocultar todos os valores na tela (blur) e PIN
   de acesso opcional.
+- **Tema** — Claro / Sistema / Escuro, além de um editor de cores
+  personalizadas (faixas, cards e fundo) no menu lateral.
 
 ## Rodar localmente
 
