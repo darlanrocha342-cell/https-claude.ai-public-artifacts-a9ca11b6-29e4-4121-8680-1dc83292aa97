@@ -51,28 +51,35 @@ e acessar `http://localhost:8000`.
    arraste a pasta do projeto direto na tela de deploy do Netlify.
 3. Build command: (vazio) — Publish directory: `.`
 
-## Banco de dados (Supabase) — schema pronto, integração ainda pendente
+## Banco de dados e login (Supabase) — integrado
 
-`supabase_schema.sql` tem as tabelas para sincronizar o ATLAS na nuvem:
-`profiles` (perfil, preferências, tema, PIN com hash, gamificação — 1 linha
-por usuário) e `envelopes`, `transactions`, `goals`, `goal_contributions`,
-`debts` (uma tabela por entidade, todas com `user_id` e Row Level Security,
-então cada pessoa só acessa os próprios dados).
+O ATLAS já fala com o Supabase: login/cadastro por e-mail e senha, e todo
+lançamento, envelope, meta e dívida é salvo na nuvem (com `localStorage`
+como cache local). `supabase_schema.sql` tem as tabelas: `profiles` (perfil,
+preferências, tema, PIN com hash, gamificação — 1 linha por usuário) e
+`envelopes`, `transactions`, `goals`, `goal_contributions`, `debts`, todas
+com `user_id` e Row Level Security — cada pessoa só acessa os próprios dados.
 
-**Como aplicar:**
-1. Crie um projeto em [supabase.com](https://supabase.com).
-2. Vá em **SQL Editor > New query**, cole o conteúdo de `supabase_schema.sql`
-   e rode.
-3. Confira em **Table Editor** se as 6 tabelas foram criadas com RLS ativo
+**Como ativar (3 passos):**
+1. Crie um projeto em [supabase.com](https://supabase.com), vá em **SQL
+   Editor > New query**, cole o conteúdo de `supabase_schema.sql` e rode.
+   Confira em **Table Editor** se as 6 tabelas foram criadas com RLS ativo
    (ícone de cadeado).
+2. Em **Project Settings > API**, copie a **Project URL** e a chave
+   **anon / public** (não é secreta — pode ficar no código do front-end).
+3. Abra `index.html`, procure por `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+   (logo no início do `<script>`) e cole os dois valores. Salve — pronto,
+   o app passa a mostrar a tela de login em vez de ir direto pro app.
 
-**O que falta pra sincronização funcionar de verdade** (fora do escopo deste
-arquivo SQL): o ATLAS hoje não pede conta — é 100% local, de propósito. Pra
-usar essas tabelas é preciso, no código do app: (1) adicionar uma tela de
-login/cadastro usando o Supabase Auth, (2) trocar as leituras/escritas que
-hoje vão pro `localStorage` por chamadas à API do Supabase, e (3) decidir a
-estratégia de conflito quando o mesmo usuário edita em dois dispositivos.
-Isso é um próximo passo à parte, não incluído aqui.
+Enquanto esses dois valores não forem preenchidos, o ATLAS continua
+funcionando 100% local (sem tela de login), como antes.
+
+**Confirmação de e-mail:** por padrão o Supabase Auth exige confirmar o
+e-mail antes do primeiro login — pode desligar isso em **Authentication >
+Providers > Email > Confirm email** se quiser testar mais rápido.
+
+**Limitação conhecida:** Exportar/Importar dados (em Configurações) ainda
+trabalha só com o cache local (`localStorage`), não lê/escreve na nuvem.
 
 ## Roadmap sugerido
 

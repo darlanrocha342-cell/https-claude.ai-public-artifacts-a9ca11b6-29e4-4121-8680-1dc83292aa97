@@ -19,6 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* ================= DESIGN SYSTEM ================= */
 :root{
@@ -355,6 +356,12 @@ table.datatable td{ padding:7px 4px; border-bottom:1px solid var(--border-soft);
 .toast{ position:fixed; left:50%; bottom:calc(110px + var(--safe-bottom)); transform:translateX(-50%); background:#1c1c20; border:1px solid var(--border); padding:11px 18px; border-radius:99px; font-size:12.5px; font-weight:700; z-index:80; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition: opacity .25s ease, transform .25s ease; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
 canvas{ display:block; width:100%; max-width:100%; }
+.auth-screen{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:16px; }
+.auth-card{ width:100%; max-width:380px; background:var(--surface-solid); border:1px solid var(--border); border-radius:20px; padding:26px 22px; }
+.auth-tabs{ display:flex; gap:6px; background:var(--surface-2); border-radius:12px; padding:4px; margin-bottom:18px; }
+.auth-tab{ flex:1; padding:9px; border-radius:9px; text-align:center; font-size:13px; font-weight:700; color:var(--text-dim); cursor:pointer; }
+.auth-tab.active{ background:var(--brand-grad); color:#fff; }
+.auth-error{ color:var(--critical); font-size:12.5px; font-weight:600; margin-top:10px; text-align:center; }
 .legend{ display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
 .legend-item{ display:flex; align-items:center; gap:6px; font-size:11.5px; color: var(--text-dim); font-weight:600; }
 .legend-dot{ width:9px; height:9px; border-radius:3px; }
@@ -380,8 +387,19 @@ canvas{ display:block; width:100%; max-width:100%; }
 
 /* ---------- estado & persistência ---------- */
 const STORAGE_KEY = 'atlas_state_v1';
-const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const uid = () => crypto.randomUUID();
 const todayISO = () => new Date().toISOString().slice(0,10);
+
+/* ---------- Supabase (nuvem) ----------
+   Cole aqui a URL e a chave "anon / public" do seu projeto Supabase
+   (Project Settings > API). Enquanto os dois valores abaixo não forem
+   preenchidos, o ATLAS continua funcionando 100% local (localStorage),
+   exatamente como hoje — nada quebra. */
+const SUPABASE_URL = 'COLE_AQUI_SUA_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'COLE_AQUI_SUA_ANON_KEY';
+const CLOUD_ENABLED = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 20;
+const sb = CLOUD_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let session = null;
 
 /* Conjunto de ícones de linha, autorais — substitui emojis genéricos do sistema
    por um único estilo consistente (mesmo espírito da marca ÓRBITA). */
@@ -496,6 +514,70 @@ function load(){
   }catch(e){ return defaultState(); }
 }
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+/* ---------- sincronização com Supabase ----------
+   O Supabase é a fonte de verdade quando CLOUD_ENABLED está ligado.
+   localStorage continua sendo usado como cache local (leitura instantânea,
+   funciona offline para visualizar dados já carregados). */
+function stateFromCloud(profile, envelopes, transactions, goals, contributions, debts){
+  const s = defaultState();
+  s.onboarded = !!(profile && profile.onboarded);
+  s.profile = { name: (profile && profile.name) || '', currency: (profile && profile.currency) || 'BRL', createdAt: (profile && profile.created_at || '').slice(0,10) || todayISO() };
+  s.security = { pin: (profile && profile.pin_hash) || null };
+  s.privacy = { hideValues: !!(profile && profile.hide_values) };
+  s.appearance = { theme: (profile && profile.theme) || 'dark', customColors: (profile && profile.custom_colors) || {} };
+  s.income = { monthlyBase: Number(profile && profile.monthly_income) || 0 };
+  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0 }));
+  s.transactions = transactions.map(t=>({ id:t.id, type:t.type, amount:Number(t.amount)||0, category:t.category, envelopeId:t.envelope_id||'', date:t.date, note:t.note||'', createdAt: new Date(t.created_at).getTime() }));
+  const contribByGoal = {};
+  contributions.forEach(c=>{ (contribByGoal[c.goal_id] = contribByGoal[c.goal_id]||[]).push({ date:c.date, amount:Number(c.amount)||0 }); });
+  s.goals = goals.map(g=>({ id:g.id, name:g.name, icon:g.icon, target:Number(g.target)||0, saved:Number(g.saved)||0, deadline:g.deadline||'', contributions: contribByGoal[g.id]||[] }));
+  s.debts = debts.map(d=>({ id:d.id, name:d.name, balance:Number(d.balance)||0, rate:Number(d.rate)||0, minPayment:Number(d.min_payment)||0 }));
+  s.gamification = { lastActiveDate: (profile && profile.last_active_date) || null, streak: 0, everHadDebt: !!(profile && profile.ever_had_debt) };
+  s.ui = { tab:'dashboard', unlocked:false };
+  return s;
+}
+
+async function syncFromCloud(){
+  const uidAuth = session.user.id;
+  const [profileRes, envRes, txRes, goalsRes, contribRes, debtsRes] = await Promise.all([
+    sb.from('profiles').select('*').eq('id', uidAuth).maybeSingle(),
+    sb.from('envelopes').select('*').eq('user_id', uidAuth).order('created_at'),
+    sb.from('transactions').select('*').eq('user_id', uidAuth).order('date', {ascending:false}),
+    sb.from('goals').select('*').eq('user_id', uidAuth).order('created_at'),
+    sb.from('goal_contributions').select('*'), // RLS já filtra pelas metas do usuário
+    sb.from('debts').select('*').eq('user_id', uidAuth).order('created_at'),
+  ]);
+  state = stateFromCloud(profileRes.data, envRes.data||[], txRes.data||[], goalsRes.data||[], contribRes.data||[], debtsRes.data||[]);
+  save();
+  applyTheme(); applyCustomColors();
+}
+
+async function cloudUpdateProfile(patch){
+  if(!CLOUD_ENABLED || !session) return;
+  try{ await sb.from('profiles').update(patch).eq('id', session.user.id); }
+  catch(e){ console.warn('falha ao sincronizar perfil', e); }
+}
+async function cloudInsert(table, row){
+  if(!CLOUD_ENABLED || !session) return;
+  try{ const { error } = await sb.from(table).insert(row); if(error) throw error; }
+  catch(e){ console.warn('falha ao sincronizar (insert)', table, e); toast('Salvo neste dispositivo. Falha ao sincronizar com a nuvem.'); }
+}
+async function cloudInsertMany(table, rows){
+  if(!CLOUD_ENABLED || !session || !rows.length) return;
+  try{ const { error } = await sb.from(table).insert(rows); if(error) throw error; }
+  catch(e){ console.warn('falha ao sincronizar (insert em lote)', table, e); }
+}
+async function cloudUpdate(table, id, patch){
+  if(!CLOUD_ENABLED || !session) return;
+  try{ const { error } = await sb.from(table).update(patch).eq('id', id); if(error) throw error; }
+  catch(e){ console.warn('falha ao sincronizar (update)', table, e); toast('Salvo neste dispositivo. Falha ao sincronizar com a nuvem.'); }
+}
+async function cloudDelete(table, id){
+  if(!CLOUD_ENABLED || !session) return;
+  try{ const { error } = await sb.from(table).delete().eq('id', id); if(error) throw error; }
+  catch(e){ console.warn('falha ao sincronizar (delete)', table, e); }
+}
 
 /* ---------- helpers ---------- */
 const fmtBRL = (v) => (v<0? '-':'') + 'R$ ' + Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1392,6 +1474,12 @@ function screenAchievements(){
 /* ---------- CONFIGURAÇÕES ---------- */
 function screenSettings(){
   return `
+  ${CLOUD_ENABLED && session ? `
+  <div class="card">
+    <div class="card-title">CONTA</div>
+    <div class="card-row" style="padding:8px 0;"><span>${esc(session.user.email||'')}</span></div>
+    <button class="btn btn-ghost btn-block" data-action="logout">Sair da conta</button>
+  </div>` : ''}
   <div class="card">
     <div class="card-title">PERFIL</div>
     <div class="field"><label>Nome</label><input type="text" id="setName" value="${esc(state.profile.name)}" /></div>
@@ -1415,7 +1503,7 @@ function screenSettings(){
       <button class="btn btn-danger btn-block" data-action="reset-data">Apagar todos os dados</button>
     </div>
   </div>
-  <div class="section-sub" style="text-align:center;margin-top:6px;">ATLAS v1.0 · Dados armazenados apenas neste dispositivo</div>
+  <div class="section-sub" style="text-align:center;margin-top:6px;">ATLAS v1.0 · ${CLOUD_ENABLED && session ? 'Dados sincronizados com a nuvem (Supabase)' : 'Dados armazenados apenas neste dispositivo'}</div>
   `;
 }
 
@@ -1766,7 +1854,8 @@ document.addEventListener('click', (e)=>{
     case 'goto':
       state.ui.tab = el.dataset.tab; save(); render(); window.scrollTo(0,0); break;
     case 'toggle-privacy':
-      state.privacy.hideValues = !state.privacy.hideValues; save(); render(); break;
+      state.privacy.hideValues = !state.privacy.hideValues; save(); render();
+      cloudUpdateProfile({ hide_values: state.privacy.hideValues }); break;
     case 'tx-filter':
       state.ui.txFilter = el.dataset.f; render(); break;
     case 'close-modal': closeModal(); break;
@@ -1778,7 +1867,8 @@ document.addEventListener('click', (e)=>{
     case 'edit-tx': openTxForm(state.transactions.find(t=>t.id===el.dataset.id)); break;
     case 'delete-tx':
       state.transactions = state.transactions.filter(t=>t.id!==el.dataset.id);
-      updateStreak(); save(); closeModal(); render(); toast('Lançamento excluído'); break;
+      updateStreak(); save(); closeModal(); render(); toast('Lançamento excluído');
+      cloudDelete('transactions', el.dataset.id); break;
     case 'tx-type': {
       document.getElementById('txType').value = el.dataset.v;
       el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
@@ -1791,18 +1881,21 @@ document.addEventListener('click', (e)=>{
     case 'delete-envelope':
       state.envelopes = state.envelopes.filter(x=>x.id!==el.dataset.id);
       state.transactions.forEach(t=>{ if(t.envelopeId===el.dataset.id) t.envelopeId=''; });
-      save(); closeModal(); render(); toast('Envelope excluído'); break;
+      save(); closeModal(); render(); toast('Envelope excluído');
+      cloudDelete('envelopes', el.dataset.id); break;
     case 'new-goal': openGoalForm(); break;
     case 'edit-goal': case 'open-goal': openGoalForm(state.goals.find(g=>g.id===el.dataset.id)); break;
     case 'delete-goal':
       state.goals = state.goals.filter(g=>g.id!==el.dataset.id);
-      save(); closeModal(); render(); toast('Meta excluída'); break;
+      save(); closeModal(); render(); toast('Meta excluída');
+      cloudDelete('goals', el.dataset.id); break;
     case 'contribute-goal': openContributeForm(el.dataset.id); break;
     case 'new-debt': openDebtForm(); break;
     case 'edit-debt': openDebtForm(state.debts.find(d=>d.id===el.dataset.id)); break;
     case 'delete-debt':
       state.debts = state.debts.filter(d=>d.id!==el.dataset.id);
-      save(); closeModal(); render(); toast('Dívida removida'); break;
+      save(); closeModal(); render(); toast('Dívida removida');
+      cloudDelete('debts', el.dataset.id); break;
     case 'debt-strategy': state.ui.debtStrategy = el.dataset.s; render(); break;
     case 'toggle-table': {
       const t = document.getElementById('table-'+el.dataset.t);
@@ -1813,6 +1906,7 @@ document.addEventListener('click', (e)=>{
       state.profile.name = document.getElementById('setName').value.trim();
       state.income.monthlyBase = parseFloat(document.getElementById('setIncome').value)||0;
       save(); render(); toast('Perfil salvo');
+      cloudUpdateProfile({ name: state.profile.name, monthly_income: state.income.monthlyBase });
       break;
     }
     case 'export-data': {
@@ -1822,8 +1916,18 @@ document.addEventListener('click', (e)=>{
       break;
     }
     case 'reset-data': {
-      if(confirm('Isso vai apagar TODOS os seus dados financeiros deste dispositivo. Tem certeza?')){
+      if(confirm(`Isso vai apagar TODOS os seus dados financeiros${CLOUD_ENABLED?' (neste dispositivo e na nuvem)':' deste dispositivo'}. Tem certeza?`)){
         if(confirm('Confirmação final: não é possível desfazer. Continuar?')){
+          if(CLOUD_ENABLED && session){
+            const uidAuth = session.user.id;
+            Promise.all([
+              sb.from('transactions').delete().eq('user_id', uidAuth),
+              sb.from('envelopes').delete().eq('user_id', uidAuth),
+              sb.from('goals').delete().eq('user_id', uidAuth),
+              sb.from('debts').delete().eq('user_id', uidAuth),
+              sb.from('profiles').update({ onboarded:false, monthly_income:0 }).eq('id', uidAuth),
+            ]).catch(e=>console.warn('falha ao apagar dados na nuvem', e));
+          }
           localStorage.removeItem(STORAGE_KEY);
           state = defaultState();
           render(); toast('Dados apagados');
@@ -1832,12 +1936,18 @@ document.addEventListener('click', (e)=>{
       break;
     }
     case 'set-pin': openPinSetup(); break;
-    case 'remove-pin': state.security.pin=null; save(); render(); toast('PIN removido'); break;
-    case 'set-theme': state.appearance.theme = el.dataset.v; save(); applyTheme(); renderDrawer(); break;
+    case 'remove-pin':
+      state.security.pin=null; save(); render(); toast('PIN removido');
+      cloudUpdateProfile({ pin_hash: null }); break;
+    case 'set-theme':
+      state.appearance.theme = el.dataset.v; save(); applyTheme(); renderDrawer();
+      cloudUpdateProfile({ theme: state.appearance.theme }); break;
     case 'open-theme': closeDrawer(); openThemeModal(); break;
     case 'reset-custom-colors':
       state.appearance.customColors = {}; save(); applyCustomColors(); openThemeModal(); toast('Cores restauradas');
+      cloudUpdateProfile({ custom_colors: {} });
       break;
+    case 'logout': closeDrawer(); logout(); break;
   }
 
   // icon/color pickers inside forms
@@ -1879,16 +1989,26 @@ document.addEventListener('submit', (e)=>{
       note: document.getElementById('txNote').value.trim(),
       createdAt: id ? (state.transactions.find(t=>t.id===id)||{}).createdAt || Date.now() : Date.now(),
     };
-    if(id){ state.transactions = state.transactions.map(t=>t.id===id?rec:t); }
-    else state.transactions.push(rec);
+    if(id){
+      state.transactions = state.transactions.map(t=>t.id===id?rec:t);
+      cloudUpdate('transactions', id, { type:rec.type, amount:rec.amount, category:rec.category, envelope_id: rec.envelopeId||null, date:rec.date, note:rec.note });
+    } else {
+      state.transactions.push(rec);
+      cloudInsert('transactions', { id:rec.id, user_id: session?.user?.id, type:rec.type, amount:rec.amount, category:rec.category, envelope_id: rec.envelopeId||null, date:rec.date, note:rec.note });
+    }
     updateStreak(); save(); closeModal(); render(); toast(id?'Lançamento atualizado':'Lançamento adicionado');
   }
   if(e.target.id==='envForm'){
     e.preventDefault();
     const id = e.target.dataset.id;
     const rec = { id: id||uid(), name: document.getElementById('envName').value.trim(), budget: parseFloat(document.getElementById('envBudget').value)||0, icon: document.getElementById('envIcon').value, color: document.getElementById('envColor').value };
-    if(id) state.envelopes = state.envelopes.map(x=>x.id===id?rec:x);
-    else state.envelopes.push(rec);
+    if(id){
+      state.envelopes = state.envelopes.map(x=>x.id===id?rec:x);
+      cloudUpdate('envelopes', id, { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color });
+    } else {
+      state.envelopes.push(rec);
+      cloudInsert('envelopes', { id:rec.id, user_id: session?.user?.id, name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color });
+    }
     save(); closeModal(); render(); toast(id?'Envelope atualizado':'Envelope criado');
   }
   if(e.target.id==='goalForm'){
@@ -1903,8 +2023,13 @@ document.addEventListener('submit', (e)=>{
       icon: document.getElementById('goalIcon').value,
       contributions: existing ? existing.contributions : [],
     };
-    if(id) state.goals = state.goals.map(g=>g.id===id?rec:g);
-    else state.goals.push(rec);
+    if(id){
+      state.goals = state.goals.map(g=>g.id===id?rec:g);
+      cloudUpdate('goals', id, { name:rec.name, target:rec.target, saved:rec.saved, deadline: rec.deadline||null, icon:rec.icon });
+    } else {
+      state.goals.push(rec);
+      cloudInsert('goals', { id:rec.id, user_id: session?.user?.id, name:rec.name, target:rec.target, saved:rec.saved, deadline: rec.deadline||null, icon:rec.icon });
+    }
     save(); closeModal(); render(); toast(id?'Meta atualizada':'Meta criada');
   }
   if(e.target.id==='contribForm'){
@@ -1916,6 +2041,8 @@ document.addEventListener('submit', (e)=>{
       g.saved += amount;
       g.contributions = g.contributions||[];
       g.contributions.push({date: todayISO(), amount});
+      cloudInsert('goal_contributions', { goal_id:id, amount, date: todayISO() });
+      cloudUpdate('goals', id, { saved: g.saved });
     }
     save(); closeModal(); render(); toast('Aporte registrado 🎉');
   }
@@ -1923,8 +2050,14 @@ document.addEventListener('submit', (e)=>{
     e.preventDefault();
     const id = e.target.dataset.id;
     const rec = { id: id||uid(), name: document.getElementById('debtName').value.trim(), balance: parseFloat(document.getElementById('debtBalance').value)||0, rate: parseFloat(document.getElementById('debtRate').value)||0, minPayment: parseFloat(document.getElementById('debtMin').value)||0 };
-    if(id) state.debts = state.debts.map(d=>d.id===id?rec:d);
-    else { state.debts.push(rec); state.gamification.everHadDebt = true; }
+    if(id){
+      state.debts = state.debts.map(d=>d.id===id?rec:d);
+      cloudUpdate('debts', id, { name:rec.name, balance:rec.balance, rate:rec.rate, min_payment:rec.minPayment });
+    } else {
+      state.debts.push(rec); state.gamification.everHadDebt = true;
+      cloudInsert('debts', { id:rec.id, user_id: session?.user?.id, name:rec.name, balance:rec.balance, rate:rec.rate, min_payment:rec.minPayment });
+      cloudUpdateProfile({ ever_had_debt: true });
+    }
     save(); closeModal(); render(); toast(id?'Dívida atualizada':'Dívida adicionada');
   }
   if(e.target.id==='onboardForm'){
@@ -1936,6 +2069,8 @@ document.addEventListener('submit', (e)=>{
     state.envelopes = generateDefaultEnvelopes(income);
     state.onboarded = true;
     save(); closeModal(); render(); toast(`Bem-vindo(a), ${name}!`);
+    cloudUpdateProfile({ name, monthly_income: income, onboarded: true });
+    cloudInsertMany('envelopes', state.envelopes.map(en=>({ id:en.id, user_id: session?.user?.id, name:en.name, icon:en.icon, color:en.color, budget:en.budget })));
   }
 });
 
@@ -1946,6 +2081,11 @@ document.addEventListener('input', (e)=>{
     state.appearance.customColors = state.appearance.customColors || {};
     state.appearance.customColors[k] = e.target.value;
     save(); applyCustomColors();
+  }
+});
+document.addEventListener('change', (e)=>{
+  if(e.target.matches('[data-action="set-custom-color"]')){
+    cloudUpdateProfile({ custom_colors: state.appearance.customColors });
   }
 });
 
@@ -1963,6 +2103,102 @@ function handleImport(e){
   reader.readAsText(file);
 }
 
+/* ---------- Autenticação (nuvem) ---------- */
+let authMode = 'login';
+let authError = '';
+let authBusy = false;
+
+function translateAuthError(msg){
+  if(/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.';
+  if(/already registered|already exists|User already registered/i.test(msg)) return 'Este e-mail já tem uma conta. Tente entrar.';
+  if(/Password should be|at least 6/i.test(msg)) return 'A senha precisa ter pelo menos 6 caracteres.';
+  if(/Unable to validate email/i.test(msg)) return 'Digite um e-mail válido.';
+  return msg || 'Algo deu errado. Tente novamente.';
+}
+
+function renderAuthScreen(){
+  document.getElementById('fabAdd').style.display = 'none';
+  document.querySelector('.tabbar').style.display = 'none';
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div class="auth-screen">
+    <div class="brand-mark" style="width:56px;height:56px;">${atlasMarkSVG()}</div>
+    <div style="text-align:center;">
+      <div style="font-weight:800;font-size:19px;">ATLAS</div>
+      <div style="font-size:11.5px;color:var(--text-mute);margin-top:2px;">Seu assessor financeiro com inteligência artificial</div>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <div class="auth-tab ${authMode==='login'?'active':''}" data-auth-mode="login">Entrar</div>
+        <div class="auth-tab ${authMode==='signup'?'active':''}" data-auth-mode="signup">Criar conta</div>
+      </div>
+      <form id="authForm">
+        <div class="field"><label>E-mail</label><input required type="email" id="authEmail" placeholder="voce@email.com" /></div>
+        <div class="field"><label>Senha</label><input required type="password" id="authPassword" minlength="6" placeholder="Mínimo 6 caracteres" /></div>
+        ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
+        <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px;" ${authBusy?'disabled':''}>${authBusy?'Aguarde…':(authMode==='login'?'Entrar':'Criar conta')}</button>
+      </form>
+      ${authMode==='login' ? `<div class="link-btn" id="authForgot" style="text-align:center;margin-top:14px;">Esqueci minha senha</div>` : ''}
+    </div>
+  </div>`;
+  document.querySelectorAll('[data-auth-mode]').forEach(el=>el.addEventListener('click', ()=>{
+    authMode = el.dataset.authMode; authError=''; renderAuthScreen();
+  }));
+  const forgot = document.getElementById('authForgot');
+  if(forgot) forgot.addEventListener('click', async ()=>{
+    const email = document.getElementById('authEmail').value.trim();
+    if(!email){ authError='Digite seu e-mail para recuperar a senha.'; renderAuthScreen(); return; }
+    try{ await sb.auth.resetPasswordForEmail(email); toast('Enviamos um link de redefinição para seu e-mail'); }
+    catch(e){ authError = 'Não foi possível enviar o e-mail de redefinição.'; renderAuthScreen(); }
+  });
+  document.getElementById('authForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    authBusy = true; authError=''; renderAuthScreen();
+    try{
+      if(authMode==='signup'){
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if(error) throw error;
+        if(!data.session){
+          authBusy=false; authMode='login'; renderAuthScreen();
+          toast('Conta criada! Confirme seu e-mail antes de entrar.');
+          return;
+        }
+        session = data.session;
+      } else {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if(error) throw error;
+        session = data.session;
+      }
+      await afterLogin();
+    }catch(err){
+      authBusy = false;
+      authError = translateAuthError(err.message);
+      renderAuthScreen();
+    }
+  });
+}
+
+async function afterLogin(){
+  await syncFromCloud();
+  document.querySelector('.tabbar').style.display = '';
+  if(state.security.pin){ await checkPin(); }
+  updateStreak();
+  render();
+  if(!state.onboarded){ setTimeout(openOnboarding, 350); }
+}
+
+async function logout(){
+  if(!confirm('Sair da sua conta ATLAS neste dispositivo?')) return;
+  await sb.auth.signOut();
+  session = null;
+  state = defaultState();
+  localStorage.removeItem(STORAGE_KEY);
+  authMode = 'login'; authError=''; authBusy=false;
+  renderAuthScreen();
+}
+
 /* ---------- PIN lock ---------- */
 async function sha256(str){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
@@ -1974,6 +2210,7 @@ function openPinSetup(){
   renderPinScreen('Crie um PIN de 4 dígitos', async (val)=>{
     state.security.pin = await sha256(val);
     save(); document.getElementById('pinScreen').innerHTML=''; render(); toast('PIN ativado');
+    cloudUpdateProfile({ pin_hash: state.security.pin });
   }, true);
 }
 function renderPinScreen(title, onComplete, isSetup){
@@ -2015,10 +2252,17 @@ function checkPin(){
 
 /* ---------- boot ---------- */
 async function boot(){
-  if(state.security.pin){ await checkPin(); }
-  updateStreak();
-  render();
-  if(!state.onboarded){ setTimeout(openOnboarding, 350); }
+  if(CLOUD_ENABLED){
+    const { data:{ session: s0 } } = await sb.auth.getSession();
+    session = s0;
+    if(session){ await afterLogin(); }
+    else { renderAuthScreen(); }
+  } else {
+    if(state.security.pin){ await checkPin(); }
+    updateStreak();
+    render();
+    if(!state.onboarded){ setTimeout(openOnboarding, 350); }
+  }
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
