@@ -6,9 +6,16 @@
 <title>ATLAS — Seu assessor financeiro com inteligência artificial</title>
 <meta name="description" content="ATLAS: seu assessor financeiro com inteligência artificial. Orçamento inteligente, metas, dívidas e insights automáticos." />
 <meta name="theme-color" content="#05070c" />
+<meta name="msapplication-TileColor" content="#05070c" />
+<meta name="msapplication-TileImage" content="icons/mstile-150x150.png" />
+<meta name="msapplication-config" content="browserconfig.xml" />
 <link rel="manifest" href="manifest.json" />
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<link rel="icon" href="icons/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+<link rel="icon" type="image/x-icon" href="icons/favicon.ico" />
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/android-chrome-192x192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icons/android-chrome-512x512.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -28,10 +35,10 @@
   --text:#f6f6f8;
   --text-dim:#9aa5b4;
   --text-mute:#63707f;
-  --brand-a:#8b7bff;
-  --brand-b:#22d3ee;
+  --brand-a:#5aa6ff;
+  --brand-b:#0052d4;
   --brand-grad: linear-gradient(135deg, var(--brand-a), var(--brand-b));
-  --brand-grad-soft: linear-gradient(135deg, rgba(139,123,255,.18), rgba(34,211,238,.14));
+  --brand-grad-soft: linear-gradient(135deg, rgba(90,166,255,.18), rgba(0,82,212,.14));
   --good:#1fd35a;
   --good-text:#3fe373;
   --warning:#fab219;
@@ -44,9 +51,9 @@
   --sheet-bg:#131316;
   --drawer-bg:#0d1220;
   --tabbar-bg: rgba(15,15,18,.85);
-  --insight-text: #e9e7ff;
+  --insight-text: #dce9ff;
   --insight-text-strong: #ffffff;
-  --brand-ink: #c9c1ff;
+  --brand-ink: #a9cdff;
   --c1:#3987e5; --c2:#d95926; --c3:#1baf7a; --c4:#c98500;
   --c5:#d55181; --c6:#2fbf4f; --c7:#9085e9; --c8:#e66767;
   --radius-lg:22px; --radius-md:16px; --radius-sm:11px;
@@ -76,9 +83,9 @@
   --sheet-bg:#ffffff;
   --drawer-bg:#ffffff;
   --tabbar-bg: rgba(255,255,255,.85);
-  --insight-text: #362f6b;
-  --insight-text-strong: #171335;
-  --brand-ink: #5b3fd6;
+  --insight-text: #1b3c6e;
+  --insight-text-strong: #0d1f3d;
+  --brand-ink: #0052d4;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
 html,body{height:100%;}
@@ -89,7 +96,7 @@ body{
 }
 h1,h2,h3,.num{ font-family:"Inter Tight","Inter",sans-serif; letter-spacing:-.02em; }
 button{ font-family:inherit; }
-::selection{ background: rgba(139,123,255,.35); }
+::selection{ background: rgba(90,166,255,.35); }
 a{ color:inherit; text-decoration:none; }
 input,select,textarea{ font-family:inherit; }
 
@@ -106,7 +113,8 @@ input,select,textarea{ font-family:inherit; }
   display:flex; align-items:center; justify-content:space-between; gap:10px;
 }
 .brand{ display:flex; align-items:center; gap:9px; }
-.brand-mark{ width:30px; height:30px; border-radius:9px; background: var(--brand-grad); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:#0a0a0c; box-shadow:0 4px 16px rgba(139,123,255,.35);}
+.brand-mark{ width:30px; height:30px; border-radius:9px; background:#05070c; display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 4px 16px rgba(0,102,255,.35);}
+.brand-mark svg{ width:74%; height:74%; }
 .brand-name{ font-weight:800; font-size:15px; letter-spacing:.02em; }
 .topbar-actions{ display:flex; align-items:center; gap:8px; }
 .icon-btn{
@@ -134,7 +142,7 @@ main{ padding: 6px 18px 24px; }
 }
 .card.glow::before{
   content:""; position:absolute; inset:-1px; border-radius:inherit; padding:1px;
-  background: linear-gradient(135deg, rgba(34,211,238,.75), rgba(139,123,255,.4), rgba(34,211,238,.08) 70%);
+  background: linear-gradient(135deg, rgba(34,211,238,.75), rgba(90,166,255,.4), rgba(34,211,238,.08) 70%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude; pointer-events:none;
 }
@@ -185,7 +193,7 @@ main{ padding: 6px 18px 24px; }
 .bar-fill.warning{ background: linear-gradient(90deg,#fab219,#e89a10); box-shadow: 0 0 10px rgba(250,178,25,.45); }
 .bar-fill.serious{ background: linear-gradient(90deg,#ec835a,#e06a3d); box-shadow: 0 0 10px rgba(236,131,90,.45); }
 .bar-fill.critical{ background: linear-gradient(90deg,#ef4a4a,#d03b3b); box-shadow: 0 0 12px rgba(239,74,74,.55); }
-.bar-fill.brand{ background: var(--brand-grad); box-shadow: 0 0 10px rgba(139,123,255,.4); }
+.bar-fill.brand{ background: var(--brand-grad); box-shadow: 0 0 10px rgba(90,166,255,.4); }
 
 /* envelopes */
 .env-item{ display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border-soft); }
@@ -199,7 +207,7 @@ main{ padding: 6px 18px 24px; }
 
 /* chips */
 .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:99px; background: var(--surface-2); border:1px solid var(--border-soft); font-size:12px; font-weight:700; color:var(--text-dim); white-space:nowrap; }
-.chip.on{ background: rgba(139,123,255,.16); border-color: rgba(139,123,255,.4); color:var(--brand-ink); }
+.chip.on{ background: rgba(90,166,255,.16); border-color: rgba(90,166,255,.4); color:var(--brand-ink); }
 .chip-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
 .chip-row::-webkit-scrollbar{ display:none; }
 .badge{ font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:99px; text-transform:uppercase; letter-spacing:.03em; border:1px solid transparent; }
@@ -210,7 +218,7 @@ main{ padding: 6px 18px 24px; }
 .badge.neutral{ background: rgba(255,255,255,.08); color: var(--text-dim); border-color: rgba(255,255,255,.12); }
 
 /* insight */
-.insight{ display:flex; gap:12px; padding:14px; border-radius: var(--radius-md); background: var(--brand-grad-soft); border:1px solid rgba(139,123,255,.25); }
+.insight{ display:flex; gap:12px; padding:14px; border-radius: var(--radius-md); background: var(--brand-grad-soft); border:1px solid rgba(90,166,255,.25); }
 .insight .ic{ width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .insight .tx{ font-size:13px; line-height:1.45; color:var(--insight-text); }
 .insight .tx b{ color:var(--insight-text-strong); }
@@ -230,7 +238,7 @@ main{ padding: 6px 18px 24px; }
 /* buttons */
 .btn{ border:none; border-radius:14px; padding:13px 18px; font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition: transform .12s ease, filter .12s ease; }
 .btn:active{ transform: scale(.97); }
-.btn-primary{ background: var(--brand-grad); color:#0a0a0c; width:100%; box-shadow:0 8px 24px rgba(139,123,255,.28); }
+.btn-primary{ background: var(--brand-grad); color:#0a0a0c; width:100%; box-shadow:0 8px 24px rgba(90,166,255,.28); }
 .btn-ghost{ background: var(--surface-2); color:var(--text); border:1px solid var(--border); }
 .btn-block{ width:100%; }
 .btn-sm{ padding:9px 14px; font-size:12.5px; border-radius:11px; }
@@ -238,7 +246,7 @@ main{ padding: 6px 18px 24px; }
 .fab{
   position:fixed; right:calc(50% - 264px); bottom: calc(96px + var(--safe-bottom)); z-index:30;
   width:58px; height:58px; border-radius:50%; background: var(--brand-grad); border:none; color:#0a0a0c;
-  font-size:26px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 30px rgba(139,123,255,.45);
+  font-size:26px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 30px rgba(90,166,255,.45);
   cursor:pointer;
 }
 @media (max-width:576px){ .fab{ right:20px; } }
@@ -255,7 +263,7 @@ main{ padding: 6px 18px 24px; }
 .tab-btn{ flex:1; background:none; border:none; color: var(--text-mute); display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; font-weight:700; padding:5px 2px; cursor:pointer; }
 .tab-btn .ic{ font-size:19px; line-height:1; }
 .tab-btn.active{ color:var(--text); }
-.tab-btn.active .ic{ filter: drop-shadow(0 0 10px rgba(139,123,255,.6)); }
+.tab-btn.active .ic{ filter: drop-shadow(0 0 10px rgba(90,166,255,.6)); }
 
 /* forms & modal */
 .modal-backdrop{ position:fixed; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); z-index:50; display:none; align-items:flex-end; justify-content:center; }
@@ -274,7 +282,7 @@ main{ padding: 6px 18px 24px; }
   width:100%; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
   border-radius:12px; padding:12px 13px; font-size:14.5px; outline:none;
 }
-.field input:focus, .field select:focus, .field textarea:focus{ border-color: rgba(139,123,255,.55); }
+.field input:focus, .field select:focus, .field textarea:focus{ border-color: rgba(90,166,255,.55); }
 .field-row{ display:flex; gap:10px; }
 .field-row .field{ flex:1; }
 .seg{ display:flex; background: var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:3px; gap:3px; }
@@ -282,7 +290,7 @@ main{ padding: 6px 18px 24px; }
 .seg button.active{ background: var(--brand-grad); color:#0a0a0c; }
 .icon-pick{ display:flex; flex-wrap:wrap; gap:8px; }
 .icon-pick button{ width:40px; height:40px; border-radius:11px; border:1px solid var(--border); background: var(--surface-2); color: var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; }
-.icon-pick button.active{ border-color: var(--brand-a); background: rgba(139,123,255,.18); color:var(--brand-ink); }
+.icon-pick button.active{ border-color: var(--brand-a); background: rgba(90,166,255,.18); color:var(--brand-ink); }
 .color-pick{ display:flex; flex-wrap:wrap; gap:8px; }
 .color-pick button{ width:28px; height:28px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
 .color-pick button.active{ border-color: var(--text); box-shadow: 0 0 0 2px var(--surface-solid); }
@@ -327,7 +335,8 @@ table.datatable td{ padding:7px 4px; border-bottom:1px solid var(--border-soft);
 }
 .drawer-backdrop.open .drawer-panel{ transform: translateX(0); }
 .drawer-brand{ display:flex; flex-direction:column; align-items:center; text-align:center; padding-bottom:18px; }
-.drawer-logo{ width:52px; height:52px; border-radius:16px; background: var(--brand-grad); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:22px; color:#0a0a0c; box-shadow:0 8px 24px rgba(139,123,255,.35); margin-bottom:10px; }
+.drawer-logo{ width:52px; height:52px; border-radius:16px; background:#05070c; display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 8px 24px rgba(0,102,255,.35); margin-bottom:10px; }
+.drawer-logo svg{ width:74%; height:74%; }
 .drawer-tagline{ font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--text-mute); text-transform:uppercase; line-height:1.5; }
 .drawer-divider{ border-top:1px solid var(--border-soft); margin-bottom:6px; }
 .drawer-list{ display:flex; flex-direction:column; gap:2px; }
@@ -353,6 +362,7 @@ canvas{ display:block; width:100%; max-width:100%; }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute;"><defs><linearGradient id="atlasGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5aa6ff"/><stop offset="100%" stop-color="#0052d4"/></linearGradient></defs></svg>
 <div id="pinScreen"></div>
 <div id="app"></div>
 <button class="fab" id="fabAdd" title="Adicionar lançamento">+</button>
@@ -417,6 +427,18 @@ const ICONS = {
 function iconSVG(key, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[key]||ICONS.box}</svg>`;
+}
+function atlasMarkSVG(){
+  return `<svg viewBox="0 0 100 100">
+    <path fill="url(#atlasGrad)" d="M50 6 L92 90 L74 90 L50 38 L26 90 L8 90 Z"/>
+    <g fill="#ffffff">
+      <rect x="27" y="75" width="7.5" height="9" rx="1.2"/>
+      <rect x="37.5" y="68" width="7.5" height="16" rx="1.2"/>
+      <rect x="48" y="60" width="7.5" height="24" rx="1.2"/>
+      <path d="M27 62 L48 48 L58 55 L74 40" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M64 38 L76 39 L75 51 Z"/>
+    </g>
+  </svg>`;
 }
 const STATUS_HEX = { good:'#3fe373', warning:'#fab219', serious:'#ec835a', critical:'#ef4a4a' };
 const SEV_HEX = { good:'#3fe373', warning:'#fab219', critical:'#ef4a4a', neutral:'#22d3ee' };
@@ -699,7 +721,7 @@ function topbarHTML(){
     const hour = new Date().getHours();
     const greet = hour<12?'Bom dia':hour<18?'Boa tarde':'Boa noite';
     return `<div class="topbar">
-      <div class="brand"><div class="brand-mark">A</div><div><div style="font-size:11.5px;color:var(--text-mute);font-weight:600;">${greet},</div><div class="brand-name">${esc(state.profile.name||'bem-vindo')}</div></div></div>
+      <div class="brand"><div class="brand-mark">${atlasMarkSVG()}</div><div><div style="font-size:11.5px;color:var(--text-mute);font-weight:600;">${greet},</div><div class="brand-name">${esc(state.profile.name||'bem-vindo')}</div></div></div>
       <div class="topbar-actions">
         <button class="icon-btn ${state.gamification.streak>0?'active':''}" data-action="goto" data-tab="achievements" title="Sequência">🔥<span style="font-size:10px;margin-left:2px;">${state.gamification.streak||0}</span></button>
         <button class="icon-btn ${state.privacy.hideValues?'active':''}" data-action="toggle-privacy" title="Ocultar valores">${state.privacy.hideValues?'🙈':'👁️'}</button>
@@ -710,7 +732,7 @@ function topbarHTML(){
   const isDrawerScreen = DRAWER_TABS.includes(state.ui.tab);
   return `<div class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      ${isDrawerScreen ? `<button class="icon-btn" data-action="goto" data-tab="dashboard">←</button>` : `<div class="brand-mark">A</div>`}
+      ${isDrawerScreen ? `<button class="icon-btn" data-action="goto" data-tab="dashboard">←</button>` : `<div class="brand-mark">${atlasMarkSVG()}</div>`}
       <div class="brand-name" style="font-size:17px;">${title}</div>
     </div>
     <div class="topbar-actions">
@@ -1358,7 +1380,7 @@ function screenAchievements(){
   <div class="card">
     <div class="card-title">MEDALHAS</div>
     ${badges.map(b=>`<div class="env-item">
-      <div class="env-ic" style="background:${b.unlocked?'rgba(139,123,255,.16)':'rgba(255,255,255,.05)'};opacity:${b.unlocked?1:.4};">${b.ic}</div>
+      <div class="env-ic" style="background:${b.unlocked?'rgba(90,166,255,.16)':'rgba(255,255,255,.05)'};opacity:${b.unlocked?1:.4};">${b.ic}</div>
       <div class="env-body" style="opacity:${b.unlocked?1:.45};">
         <div class="env-top"><span>${b.name}</span>${b.unlocked?'<span class="badge good">Desbloqueada</span>':''}</div>
         <div class="section-sub" style="margin:2px 0 0;">${b.desc}</div>
@@ -1498,7 +1520,7 @@ function renderDrawer(){
   const theme = state.appearance.theme;
   document.getElementById('drawerPanel').innerHTML = `
     <div class="drawer-brand">
-      <div class="drawer-logo">A</div>
+      <div class="drawer-logo">${atlasMarkSVG()}</div>
       <div class="drawer-tagline">Seu assessor financeiro<br/>com inteligência artificial</div>
     </div>
     <div class="drawer-divider"></div>
@@ -1957,7 +1979,7 @@ function openPinSetup(){
 function renderPinScreen(title, onComplete, isSetup){
   const el = document.getElementById('pinScreen');
   el.innerHTML = `<div class="pin-screen">
-    <div class="brand-mark" style="width:52px;height:52px;font-size:22px;">A</div>
+    <div class="brand-mark" style="width:52px;height:52px;">${atlasMarkSVG()}</div>
     <div style="font-weight:800;font-size:16px;">${title}</div>
     <div class="pin-dots" id="pinDots">${'0000'.split('').map(()=>'<span class="pin-dot"></span>').join('')}</div>
     <div class="pin-pad">
