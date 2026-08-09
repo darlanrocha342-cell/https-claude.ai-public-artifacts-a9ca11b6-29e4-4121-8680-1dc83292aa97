@@ -129,15 +129,11 @@ main{ padding: 6px 18px 24px; }
 .divider-stats .dstat + .dstat{ border-left:1px solid rgba(148,180,214,.16); }
 .divider-stats .dstat .lbl{ display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-mute); font-weight:700; text-transform:uppercase; letter-spacing:.02em; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .divider-stats .dstat .val{ font-size:13px; font-weight:800; line-height:1.25; word-break:break-word; }
+.divider-stats .dstat .sub2{ font-size:9.5px; color:var(--text-mute); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.divider-stats .dstat .lbl svg{ flex:0 0 auto; }
 
 /* stat grid */
 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
-.stat-tile{ padding:14px; background: var(--card-navy); border-color: rgba(148,180,214,.14); }
-.stat-tile .ic{ width:26px; height:26px; border-radius:8px; background: rgba(34,211,238,.1); border:1px solid rgba(34,211,238,.22); color:#5eead4; display:flex; align-items:center; justify-content:center; margin-bottom:9px; }
-.stat-tile .num{ font-size:19px; font-weight:800; margin-top:2px; }
-.stat-tile .lbl{ font-size:10.5px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
-.stat-tile .sub{ font-size:10.5px; color: var(--text-mute); margin-top:3px; }
 
 /* progress bars */
 .bar-track{ height:8px; border-radius:99px; background: rgba(255,255,255,.08); overflow:hidden; position:relative; }
@@ -628,10 +624,25 @@ function screenDashboard(){
     </div>
   </div>
 
-  <div class="grid3">
-    <div class="card stat-tile"><div class="ic">${iconSVG('income',15)}</div><div class="lbl">Disponível / dia</div><div class="num">${money(m.availableToday)}</div><div class="sub">${m.daysLeft} dias restantes</div></div>
-    <div class="card stat-tile"><div class="ic">${iconSVG('piggy',15)}</div><div class="lbl">Economia</div><div class="num" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div><div class="sub">da renda</div></div>
-    <div class="card stat-tile"><div class="ic">${iconSVG('shield',15)}</div><div class="lbl">Nível</div><div class="num">Lv.${lvl.level}</div><div class="sub">${lvl.xp} XP</div></div>
+  <div class="card glow">
+    <div class="card-head" style="margin-bottom:14px;"><div class="ic">${iconSVG('shield',16)}</div><div class="t">Resumo rápido</div></div>
+    <div class="divider-stats">
+      <div class="dstat">
+        <div class="lbl">${iconSVG('income',12)}Por dia</div>
+        <div class="val">${money(m.availableToday)}</div>
+        <div class="sub2">${m.daysLeft} dias restantes</div>
+      </div>
+      <div class="dstat">
+        <div class="lbl">${iconSVG('piggy',12)}Economia</div>
+        <div class="val" style="color:${m.savings>=0?'var(--good-text)':'var(--critical)'}">${(m.savingsRate*100).toFixed(0)}%</div>
+        <div class="sub2">da renda</div>
+      </div>
+      <div class="dstat">
+        <div class="lbl">${iconSVG('shield',12)}Nível</div>
+        <div class="val">Lv.${lvl.level}</div>
+        <div class="sub2">${lvl.xp} XP</div>
+      </div>
+    </div>
   </div>
 
   ${insights.map(i=>`<div class="insight"><div class="ic">${i.ic}</div><div class="tx">${i.text}</div></div>`).join('')}
