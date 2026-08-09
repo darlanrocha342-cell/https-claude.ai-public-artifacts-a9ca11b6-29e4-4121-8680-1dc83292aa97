@@ -733,7 +733,10 @@ function screenDashboard(){
   <div class="card glow hero">
     <div class="card-row">
       <div class="card-head"><div class="ic">${iconSVG('chart',17)}</div><div class="t">Saldo do mês</div></div>
-      <span class="badge ${m.score>=70?'good':m.score>=45?'warning':'critical'}">Score ${m.score}</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        ${progressRing(m.score/100, 44, 4, STATUS_HEX[m.score>=70?'good':m.score>=45?'warning':'critical'], `<div style="font-size:12px;font-weight:800;color:${STATUS_HEX[m.score>=70?'good':m.score>=45?'warning':'critical']};">${m.score}</div>`)}
+        <div style="font-size:8px;font-weight:800;letter-spacing:.05em;color:var(--text-mute);text-transform:uppercase;">Score</div>
+      </div>
     </div>
     <div class="hero-amount ${m.savings<0?'neg':''}">${money(m.savings)}</div>
     <div class="divider-stats">
