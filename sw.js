@@ -1,4 +1,4 @@
-var CACHE_NAME = "orbita-cache-v5";
+var CACHE_NAME = "zenite-cache-v1";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -49,78 +49,6 @@ self.addEventListener("fetch", function (event) {
         })
         .catch(function () { return cached; });
       return cached || networkFetch;
-    })
-  );
-});
-
-// Real push notifications: shown by the OS even with the app fully closed,
-// since this runs in the service worker, not the page.
-self.addEventListener("push", function (event) {
-  var data = {};
-  try { data = event.data ? event.data.json() : {}; } catch (e) {}
-  var title = data.title || "ÓRBITA";
-  var options = {
-    body: data.body || "",
-    icon: "icons/icon-192.png",
-    badge: "icons/icon-192.png",
-    tag: data.tag || "orbita-reminder-" + Date.now(),
-    // Vibração mais longa e insistente, tipo despertador. O navegador só
-    // toca esse padrão uma vez ao chegar (não existe API web pra vibração
-    // em loop contínuo) — mas "requireInteraction" compensa isso mantendo a
-    // notificação fixa na tela até o usuário tocar em algo, em vez de sumir
-    // sozinha em poucos segundos.
-    vibrate: [500, 200, 500, 200, 500, 200, 500],
-    requireInteraction: true,
-    actions: [{ action: "dismiss", title: "Desligar" }],
-    // Guardamos os dados do compromisso aqui pra poder falar em voz alta
-    // assim que o usuário tocar na notificação (ver notificationclick abaixo)
-    // — um celular travado não deixa nenhum app tocar áudio customizado
-    // vindo direto da notificação, então a fala só acontece quando o app
-    // realmente abre/ganha foco.
-    data: {
-      url: data.url || "./",
-      apptTitle: data.apptTitle || "",
-      apptTime: data.apptTime || "",
-      apptLocation: data.apptLocation || ""
-    }
-  };
-  event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener("notificationclick", function (event) {
-  event.notification.close();
-
-  // Botão "Desligar": só fecha a notificação (já feito acima), sem abrir o
-  // app nem falar nada — é o gesto de "desligar o despertador".
-  if (event.action === "dismiss") return;
-
-  var data = event.notification.data || {};
-  var url = data.url || "./";
-  var speakMsg = data.apptTitle
-    ? { type: "speak-reminder", apptTitle: data.apptTitle, apptTime: data.apptTime, apptLocation: data.apptLocation }
-    : null;
-
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
-      for (var i = 0; i < list.length; i++) {
-        if ("focus" in list[i]) {
-          if (speakMsg) list[i].postMessage(speakMsg);
-          return list[i].focus();
-        }
-      }
-      if (clients.openWindow) {
-        // Não há janela aberta pra mandar a mensagem: a página ainda vai
-        // carregar, então passamos os dados pela própria URL — o app lê
-        // esses parâmetros assim que inicia e fala o lembrete.
-        if (speakMsg) {
-          var qs = "speak=1"
-            + "&apptTitle=" + encodeURIComponent(data.apptTitle || "")
-            + "&apptTime=" + encodeURIComponent(data.apptTime || "")
-            + "&apptLocation=" + encodeURIComponent(data.apptLocation || "");
-          url += (url.indexOf("?") === -1 ? "?" : "&") + qs;
-        }
-        return clients.openWindow(url);
-      }
     })
   );
 });
