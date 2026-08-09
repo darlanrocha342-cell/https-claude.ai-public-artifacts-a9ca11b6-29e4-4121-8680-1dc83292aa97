@@ -51,9 +51,32 @@ e acessar `http://localhost:8000`.
    arraste a pasta do projeto direto na tela de deploy do Netlify.
 3. Build command: (vazio) — Publish directory: `.`
 
+## Banco de dados (Supabase) — schema pronto, integração ainda pendente
+
+`supabase_schema.sql` tem as tabelas para sincronizar o ATLAS na nuvem:
+`profiles` (perfil, preferências, tema, PIN com hash, gamificação — 1 linha
+por usuário) e `envelopes`, `transactions`, `goals`, `goal_contributions`,
+`debts` (uma tabela por entidade, todas com `user_id` e Row Level Security,
+então cada pessoa só acessa os próprios dados).
+
+**Como aplicar:**
+1. Crie um projeto em [supabase.com](https://supabase.com).
+2. Vá em **SQL Editor > New query**, cole o conteúdo de `supabase_schema.sql`
+   e rode.
+3. Confira em **Table Editor** se as 6 tabelas foram criadas com RLS ativo
+   (ícone de cadeado).
+
+**O que falta pra sincronização funcionar de verdade** (fora do escopo deste
+arquivo SQL): o ATLAS hoje não pede conta — é 100% local, de propósito. Pra
+usar essas tabelas é preciso, no código do app: (1) adicionar uma tela de
+login/cadastro usando o Supabase Auth, (2) trocar as leituras/escritas que
+hoje vão pro `localStorage` por chamadas à API do Supabase, e (3) decidir a
+estratégia de conflito quando o mesmo usuário edita em dois dispositivos.
+Isso é um próximo passo à parte, não incluído aqui.
+
 ## Roadmap sugerido
 
-- Sincronização em nuvem opcional (Supabase) mantendo o modo local como padrão
+- Sincronização em nuvem com Supabase (schema pronto — ver seção acima)
 - Calendário financeiro (contas a vencer, parcelas, assinaturas)
 - Módulo de investimentos (renda fixa, ações, cripto, rentabilidade)
 - Simulador "e se" (alterar renda, gastos, metas e ver o impacto na hora)

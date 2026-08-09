@@ -169,7 +169,7 @@ main{ padding: 6px 18px 24px; }
 .divider-stats .dstat{ flex:1; padding:12px 6px 12px 12px; min-width:0; }
 .divider-stats .dstat + .dstat{ border-left:1px solid rgba(148,180,214,.16); }
 .divider-stats .dstat .lbl{ display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-mute); font-weight:700; text-transform:uppercase; letter-spacing:.02em; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.divider-stats .dstat .val{ font-size:13px; font-weight:800; line-height:1.25; word-break:break-word; }
+.divider-stats .dstat .val{ font-size:13px; font-weight:800; line-height:1.25; }
 .divider-stats .dstat .sub2{ font-size:9.5px; color:var(--text-mute); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .divider-stats .dstat .lbl svg{ flex:0 0 auto; }
 
@@ -179,7 +179,7 @@ main{ padding: 6px 18px 24px; }
 .legend-row .lstat:first-child{ padding-left:0; }
 .legend-row .lstat:not(:first-child){ border-left:1px solid rgba(148,180,214,.14); }
 .legend-row .lstat .lbl{ display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-mute); font-weight:700; text-transform:uppercase; letter-spacing:.02em; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.legend-row .lstat .val{ font-size:13px; font-weight:800; line-height:1.25; word-break:break-word; }
+.legend-row .lstat .val{ font-size:13px; font-weight:800; line-height:1.25; }
 .legend-row .lstat .sub2{ font-size:9px; color:var(--text-mute); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* stat grid */
@@ -770,7 +770,7 @@ function screenDashboard(){
       <div class="lstat">
         <div class="lbl">${iconSVG('income',12)}Por dia</div>
         <div class="val">${money(m.availableToday)}</div>
-        <div class="sub2">${m.daysLeft} dias restantes</div>
+        <div class="sub2">${m.daysLeft} dias</div>
       </div>
       <div class="lstat">
         <div class="lbl">${iconSVG('piggy',12)}Economia</div>
