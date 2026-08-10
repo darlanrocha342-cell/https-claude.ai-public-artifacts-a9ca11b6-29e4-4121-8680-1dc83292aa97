@@ -1586,8 +1586,8 @@ function screenDebts(){
         <div class="hero-pill"><div class="lbl">JUROS TOTAIS</div><div class="val">${money(sim.totalInterest)}</div></div>
       </div>` : ''}
   </div>
-  <div class="card-title" style="margin:4px 4px 8px;display:flex;justify-content:space-between;align-items:center;">ORDEM DE PAGAMENTO<span class="link-btn" data-action="new-debt">+ nova dívida</span></div>
-  ${sorted.length ? sorted.map(d=>debtCard(d)).join('') : `<div class="card"><div class="empty"><div class="ic">${iconSVG('card',26)}</div><div class="t">Cadastre suas dívidas para receber a melhor estratégia de quitação</div><button class="btn btn-primary" style="margin-top:14px;" data-action="new-debt">Adicionar dívida</button></div></div>`}
+  <div class="card-title" style="margin:4px 4px 8px;display:flex;justify-content:space-between;align-items:center;">ORDEM DE PAGAMENTO (${sorted.length})<span class="link-btn" data-action="new-debt">+ nova dívida</span></div>
+  ${sorted.length ? `<div style="max-height:min(58vh,560px);overflow-y:auto;padding-right:2px;">${sorted.map(d=>debtCard(d)).join('')}</div>` : `<div class="card"><div class="empty"><div class="ic">${iconSVG('card',26)}</div><div class="t">Cadastre suas dívidas para receber a melhor estratégia de quitação</div><button class="btn btn-primary" style="margin-top:14px;" data-action="new-debt">Adicionar dívida</button></div></div>`}
   `;
 }
 function debtCard(d){
@@ -1602,12 +1602,13 @@ function debtCard(d){
     <div style="font-size:22px;font-weight:800;">${money(d.balance)}</div>
     <div class="section-sub" style="margin:2px 0 10px;">Saldo devedor${d.institution?` · ${esc(d.institution)}`:''}</div>
     <div class="bar-track" style="margin-bottom:6px;"><div class="bar-fill ${barClass}" style="width:${c.pct*100}%"></div></div>
-    <div class="section-sub" style="margin-bottom:14px;">${(c.pct*100).toFixed(0)}% quitado</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span class="section-sub" style="margin:0;">${(c.pct*100).toFixed(0)}% quitado</span>
+      <span style="font-size:12px;font-weight:800;color:${quitada?'var(--good-text)':'var(--text)'};">Parcelas ${d.paidInstallments}/${d.totalInstallments} <span style="color:var(--text-mute);font-weight:700;">· Restam ${c.remaining}</span></span>
+    </div>
     <div class="grid2" style="margin-bottom:12px;">
-      <div class="hero-pill"><div class="lbl">PARCELAS</div><div class="val">${d.paidInstallments}/${d.totalInstallments}</div></div>
       <div class="hero-pill"><div class="lbl">VALOR DA PARCELA</div><div class="val" style="font-size:13px;">${fmtBRL(d.installmentAmount)}</div></div>
-      <div class="hero-pill"><div class="lbl">PRÓX. VENCIMENTO</div><div class="val" style="font-size:13px;">${c.nextDue?fmtDate(c.nextDue):'—'}</div></div>
-      <div class="hero-pill"><div class="lbl">TEMPO RESTANTE</div><div class="val" style="font-size:13px;">${c.remaining>0?c.remaining+' meses':'—'}</div></div>
+      <div class="hero-pill"><div class="lbl">PRÓXIMO VENCIMENTO</div><div class="val" style="font-size:13px;">${c.nextDue?fmtDate(c.nextDue):'—'}</div></div>
     </div>
     <div class="section-sub" style="margin-bottom:14px;">Juros ${d.rate}% a.m.</div>
     <div style="display:flex;gap:8px;">
