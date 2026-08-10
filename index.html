@@ -1430,8 +1430,18 @@ const DEBT_CATEGORY_ICON = { financiamento:'building', emprestimo:'wallet', cart
 function round2(v){ return Math.round((v+Number.EPSILON)*100)/100; }
 function addMonthsISO(iso, n){
   const d = new Date((iso||todayISO())+'T00:00:00');
-  d.setMonth(d.getMonth()+n);
-  return d.toISOString().slice(0,10);
+  const day = d.getDate();
+  const targetY = d.getFullYear(), targetM = d.getMonth()+n;
+  const lastDay = new Date(targetY, targetM+1, 0).getDate();
+  const result = new Date(targetY, targetM, Math.min(day, lastDay));
+  return result.toISOString().slice(0,10);
+}
+function computeFirstDueDate(contractDateISO, dueDay){
+  const c = new Date((contractDateISO||todayISO())+'T00:00:00');
+  const lastDay = new Date(c.getFullYear(), c.getMonth()+1, 0).getDate();
+  let due = new Date(c.getFullYear(), c.getMonth(), Math.min(dueDay, lastDay));
+  if(due <= c) return addMonthsISO(due.toISOString().slice(0,10), 1);
+  return due.toISOString().slice(0,10);
 }
 function monthYearLabel(iso){
   if(!iso) return '—';
@@ -2084,12 +2094,10 @@ function openDebtForm(existing){
     </div>
     <div class="field-row">
       <div class="field"><label>Juros ao mês (%)</label><input required type="number" step="0.01" id="debtRate" value="${d.rate||''}" /></div>
-      <div class="field"><label>Dia do vencimento</label><input type="number" min="1" max="31" id="debtDueDay" value="${d.dueDay||5}" /></div>
+      <div class="field"><label>Data da compra</label><input required type="date" id="debtContractDate" value="${d.contractDate || d.firstDueDate || todayISO()}" /></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>Data da contratação</label><input type="date" id="debtContractDate" value="${d.contractDate}" /></div>
-      <div class="field"><label>Primeiro vencimento</label><input required type="date" id="debtFirstDue" value="${d.firstDueDate}" /></div>
-    </div>
+    <div class="field"><label>Dia do vencimento mensal</label><input required type="number" min="1" max="31" id="debtDueDay" value="${d.dueDay||5}" /></div>
+    <div class="section-sub" style="margin:-6px 0 4px;">O ATLAS calcula sozinho a data de cada parcela a partir daqui — não precisa informar o primeiro vencimento manualmente.</div>
 
     <div class="card-title" style="margin:18px 0 10px;">PARCELAMENTO</div>
     <div class="field-row">
@@ -2356,6 +2364,8 @@ document.addEventListener('submit', (e)=>{
     const total = Math.max(1, parseInt(document.getElementById('debtTotalInst').value)||1);
     const paid = clamp(parseInt(document.getElementById('debtPaidInst').value)||0, 0, total);
     const installmentAmount = parseFloat(document.getElementById('debtInstallmentAmount').value)||0;
+    const contractDate = document.getElementById('debtContractDate').value;
+    const dueDay = clamp(parseInt(document.getElementById('debtDueDay').value)||5, 1, 31);
     const rec = {
       id: id||uid(),
       name: document.getElementById('debtName').value.trim(),
@@ -2364,9 +2374,9 @@ document.addEventListener('submit', (e)=>{
       originalAmount: parseFloat(document.getElementById('debtOriginal').value)||0,
       balance: parseFloat(document.getElementById('debtBalance').value)||0,
       rate: parseFloat(document.getElementById('debtRate').value)||0,
-      contractDate: document.getElementById('debtContractDate').value,
-      firstDueDate: document.getElementById('debtFirstDue').value,
-      dueDay: parseInt(document.getElementById('debtDueDay').value)||5,
+      contractDate,
+      firstDueDate: computeFirstDueDate(contractDate, dueDay),
+      dueDay,
       totalInstallments: total,
       paidInstallments: paid,
       installmentAmount,
