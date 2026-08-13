@@ -594,7 +594,7 @@ function stateFromCloud(profile, envelopes, transactions, goals, contributions, 
   s.privacy = { hideValues: !!(profile && profile.hide_values) };
   s.appearance = { theme: (profile && profile.theme) || 'dark', customColors: (profile && profile.custom_colors) || {} };
   s.income = { monthlyBase: Number(profile && profile.monthly_income) || 0 };
-  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0, fixed:!!e.fixed, autoLaunch:!!e.auto_launch, dueDay:e.due_day||5, lastAutoLaunch:e.last_auto_launch||null }));
+  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0, fixed:!!e.fixed, autoLaunch:!!e.auto_launch, dueDay:e.due_day||5, projectedAmount:Number(e.projected_amount)||0, lastAutoLaunch:e.last_auto_launch||null }));
   s.transactions = transactions.map(t=>({ id:t.id, type:t.type, amount:Number(t.amount)||0, category:t.category, envelopeId:t.envelope_id||'', date:t.date, note:t.note||'', createdAt: new Date(t.created_at).getTime() }));
   const contribByGoal = {};
   contributions.forEach(c=>{ (contribByGoal[c.goal_id] = contribByGoal[c.goal_id]||[]).push({ date:c.date, amount:Number(c.amount)||0 }); });
@@ -688,6 +688,15 @@ function statusForPct(pct){
   return 'good';
 }
 function statusLabel(s){ return {good:'No ritmo', warning:'Atenção', serious:'Quase no limite', critical:'Estourou'}[s]; }
+function envelopeStatus(e, spent){
+  const budget = e.budget||0;
+  if(!e.fixed) return statusForPct(budget>0 ? spent/budget : 0);
+  // despesa fixa: bater exatamente o valor da conta é o esperado, não um estouro.
+  if(spent <= budget + 0.005) return 'good';
+  const ceiling = e.projectedAmount>0 ? e.projectedAmount : budget;
+  if(ceiling<=0) return 'critical';
+  return statusForPct(spent/ceiling);
+}
 
 /* ---------- score & recomendações ---------- */
 function computeMetrics(){
@@ -703,7 +712,7 @@ function computeMetrics(){
   const dayOfMonth = now.getDate();
   const daysLeft = Math.max(1, dim - dayOfMonth + 1);
   const availableToday = Math.max(0, totalBudget - spentAll) / daysLeft;
-  const overBudgetCount = state.envelopes.filter(e => e.budget>0 && envelopeSpent(e.id,0) >= e.budget).length;
+  const overBudgetCount = state.envelopes.filter(e => e.budget>0 && envelopeStatus(e, envelopeSpent(e.id,0))==='critical').length;
   const budgetAdherence = state.envelopes.length ? 1 - clamp(overBudgetCount/state.envelopes.length,0,1) : 1;
 
   let goalOnTrackRatio = 1;
@@ -782,7 +791,16 @@ function computeInsights(){
         insights.push({icKey:'chart', sev:'warning', text:`Gasto com <b>${esc(env.name)}</b> está ${pctAbove}% acima da sua média. Reduzindo 15%, você economizaria cerca de <b>${fmtBRL(yearlyIfReduced)}</b>/ano.`});
       }
     }
-    if(env.budget>0){
+    if(env.budget>0 && env.fixed){
+      // despesa fixa: bater o valor esperado é normal, não gera aviso. Só alerta se passar do teto projetado.
+      const overBy = spentNow - env.budget;
+      if(env.projectedAmount>0){
+        const overCeiling = spentNow - env.projectedAmount;
+        if(overCeiling>0.005) insights.push({icKey:'alert', sev:'critical', text:`<b>${esc(env.name)}</b> passou do teto projetado (${fmtBRL(env.projectedAmount)}) em ${fmtBRL(overCeiling)}.`});
+      } else if(overBy>0.005){
+        insights.push({icKey:'alert', sev:'critical', text:`<b>${esc(env.name)}</b> veio ${fmtBRL(overBy)} acima do valor fixo esperado.`});
+      }
+    } else if(env.budget>0){
       const pct = spentNow/env.budget;
       const overBy = spentNow - env.budget;
       if(pct>=0.9 && pct<1) insights.push({icKey:'alert', sev:'warning', text:`Orçamento de <b>${esc(env.name)}</b> já está em ${(pct*100).toFixed(0)}%. Faltam ${fmtBRL(Math.max(0,env.budget-spentNow))} até o limite.`});
@@ -1053,7 +1071,7 @@ function screenBudget(){
 function envelopeRowEditable(e){
   const spent = envelopeSpent(e.id,0);
   const pct = e.budget>0 ? spent/e.budget : 0;
-  const status = statusForPct(pct);
+  const status = envelopeStatus(e, spent);
   const color = STATUS_HEX[status];
   const ring = progressRing(pct, 46, 3.5, color, `<div style="color:${e.color};">${iconSVG(e.icon,18)}</div>`);
   return `<div class="env-item">
@@ -2152,6 +2170,8 @@ function openEnvelopeForm(existing){
       <div class="toggle-row"><span class="lbl">Lançar automaticamente todo mês</span><label class="switch"><input type="checkbox" id="envAutoLaunch" ${e.autoLaunch?'checked':''} /><span class="track"></span></label></div>
       <div class="field"><label>Dia do lançamento</label><input type="number" min="1" max="31" id="envDueDay" value="${e.dueDay||5}" /></div>
       <div class="section-sub" style="margin:-6px 0 4px;">No dia informado, o ATLAS lança o valor do orçamento como despesa sozinho na próxima vez que você abrir o app.</div>
+      <div class="field"><label>Valor projetado (opcional)</label><input type="number" step="0.01" inputmode="decimal" id="envProjected" value="${e.projectedAmount||''}" placeholder="Ex: 600,00" /></div>
+      <div class="section-sub" style="margin:-6px 0 4px;">Use se essa conta costuma variar (ex: condomínio com taxa extra). Bater o valor fixo normal não é tratado como estouro — só avisamos se passar desse teto.</div>
     </div>
     <button class="btn btn-primary btn-block" type="submit">${isEdit?'Salvar':'Criar envelope'}</button>
     ${isEdit?`<button type="button" class="btn btn-danger btn-block" style="margin-top:10px;" data-action="delete-envelope" data-id="${e.id}">Excluir envelope</button>`:''}
@@ -2439,9 +2459,10 @@ document.addEventListener('submit', (e)=>{
       fixed: document.getElementById('envFixed').checked,
       autoLaunch: document.getElementById('envAutoLaunch').checked,
       dueDay: clamp(parseInt(document.getElementById('envDueDay').value)||5, 1, 31),
+      projectedAmount: parseFloat(document.getElementById('envProjected').value)||0,
       lastAutoLaunch: existingEnv ? existingEnv.lastAutoLaunch||null : null,
     };
-    const cloudPayload = { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed, auto_launch:rec.autoLaunch, due_day:rec.dueDay, last_auto_launch:rec.lastAutoLaunch };
+    const cloudPayload = { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed, auto_launch:rec.autoLaunch, due_day:rec.dueDay, projected_amount:rec.projectedAmount, last_auto_launch:rec.lastAutoLaunch };
     if(id){
       state.envelopes = state.envelopes.map(x=>x.id===id?rec:x);
       cloudUpdate('envelopes', id, cloudPayload);
