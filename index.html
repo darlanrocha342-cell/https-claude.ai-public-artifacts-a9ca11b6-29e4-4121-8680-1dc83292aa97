@@ -93,7 +93,7 @@ html,body{height:100%;}
 body{
   margin:0; background: var(--page); background-image: var(--bg-grad-1); background-attachment: fixed;
   color: var(--text); font-family:"Inter", -apple-system, BlinkMacSystemFont,"Segoe UI",sans-serif;
-  -webkit-font-smoothing:antialiased; overflow-x:hidden; min-height:100vh;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
 }
 h1,h2,h3,.num{ font-family:"Inter Tight","Inter",sans-serif; letter-spacing:-.02em; }
 button{ font-family:inherit; }
@@ -106,7 +106,7 @@ input,select,textarea{ font-family:inherit; }
 ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.12); border-radius:8px; }
 
 /* layout shells */
-#app{ max-width:560px; margin:0 auto; min-height:100vh; padding-bottom: calc(92px + var(--safe-bottom)); position:relative; }
+#app{ max-width:560px; margin:0 auto; min-height:100vh; padding-bottom: calc(92px + var(--safe-bottom)); position:relative; overflow-x:hidden; }
 .topbar{
   position:sticky; top:0; z-index:20; padding: calc(16px + var(--safe-top)) 18px 12px;
   background: linear-gradient(to bottom, var(--scrim-strong) 60%, var(--scrim-clear));
