@@ -453,19 +453,6 @@ function initSupabaseClient(){
 initSupabaseClient();
 let session = null;
 
-/* ---------- Chave de acesso (portão de entrada) ----------
-   Troque o valor abaixo pela sua chave de acesso privada. Enquanto ela
-   ficar com o valor padrão, o portão fica desligado e o app abre direto.
-   Aviso: como o ATLAS é um arquivo estático (sem servidor), essa chave
-   fica visível a quem abrir o código-fonte da página — funciona como um
-   filtro simples para manter curiosos de fora, não como segurança real
-   contra alguém decidido a burlar. */
-const ACCESS_KEY = 'atlas2026';
-const ACCESS_GATE_ENABLED = ACCESS_KEY !== 'COLE_AQUI_SUA_CHAVE_DE_ACESSO' && ACCESS_KEY.length > 0;
-const GATE_STORAGE_KEY = 'atlas_gate_unlocked_v1';
-let gateError = '';
-let gateBusy = false;
-
 /* Conjunto de ícones de linha, autorais — substitui emojis genéricos do sistema
    por um único estilo consistente (mesmo espírito da marca ÓRBITA). */
 const ICONS = {
@@ -1872,8 +1859,8 @@ function screenSettings(){
   ${CLOUD_ENABLED && session ? `
   <div class="card">
     <div class="card-title">CONTA</div>
-    <div class="card-row" style="padding:8px 0;"><span>${esc(session.user.email||'')}</span></div>
-    <button class="btn btn-ghost btn-block" data-action="logout">Sair da conta</button>
+    <div class="card-row" style="padding:8px 0;"><span>${session.user.email ? esc(session.user.email) : 'Sessão anônima (sem e-mail)'}</span></div>
+    <button class="btn btn-ghost btn-block" data-action="logout">Desconectar da nuvem</button>
   </div>` : ''}
   <div class="card">
     <div class="card-title">NUVEM (SUPABASE)</div>
@@ -2398,6 +2385,13 @@ document.addEventListener('click', (e)=>{
       break;
     case 'logout': closeDrawer(); logout(); break;
     case 'open-supabase-setup': supaSetupError=''; renderSupabaseSetupScreen(); break;
+    case 'retry-cloud-connect': continueBoot(); break;
+    case 'cloud-disconnect-fallback':
+      localStorage.setItem(SUPABASE_SETUP_SKIPPED_KEY, '1');
+      localStorage.removeItem(SUPABASE_CONFIG_KEY);
+      initSupabaseClient();
+      continueBoot();
+      break;
   }
 
   // icon/color pickers inside forms
@@ -2588,40 +2582,6 @@ function handleImport(e){
 }
 
 /* ---------- Portão de acesso ---------- */
-function renderAccessGate(){
-  document.getElementById('fabAdd').style.display = 'none';
-  document.querySelector('.tabbar').style.display = 'none';
-  const app = document.getElementById('app');
-  app.classList.add('full-screen');
-  app.innerHTML = `
-  <div class="auth-screen">
-    <div class="brand-mark" style="width:56px;height:56px;">${atlasMarkSVG()}</div>
-    <div style="text-align:center;">
-      <div style="font-weight:800;font-size:19px;">ATLAS</div>
-      <div style="font-size:11.5px;color:var(--text-mute);margin-top:2px;">Acesso restrito — insira a chave de acesso</div>
-    </div>
-    <div class="auth-card">
-      <form id="gateForm">
-        <div class="field"><label>Chave de acesso</label><input required type="password" id="gateKeyInput" placeholder="Digite a chave" autocomplete="off" autofocus /></div>
-        ${gateError ? `<div class="auth-error">${esc(gateError)}</div>` : ''}
-        <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px;" ${gateBusy?'disabled':''}>${gateBusy?'Verificando…':'Entrar'}</button>
-      </form>
-    </div>
-  </div>`;
-  document.getElementById('gateForm').addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const val = document.getElementById('gateKeyInput').value;
-    if(val === ACCESS_KEY){
-      localStorage.setItem(GATE_STORAGE_KEY, '1');
-      gateError = '';
-      continueBoot();
-    } else {
-      gateError = 'Chave incorreta.';
-      renderAccessGate();
-    }
-  });
-}
-
 /* ---------- Conexão com o Supabase ---------- */
 let supaSetupError = '';
 let supaSetupBusy = false;
@@ -2671,82 +2631,32 @@ function renderSupabaseSetupScreen(){
   });
 }
 
-/* ---------- Autenticação (nuvem) ---------- */
-let authMode = 'login';
-let authError = '';
-let authBusy = false;
-
-function translateAuthError(msg){
-  if(/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.';
-  if(/already registered|already exists|User already registered/i.test(msg)) return 'Este e-mail já tem uma conta. Tente entrar.';
-  if(/Password should be|at least 6/i.test(msg)) return 'A senha precisa ter pelo menos 6 caracteres.';
-  if(/Unable to validate email/i.test(msg)) return 'Digite um e-mail válido.';
-  return msg || 'Algo deu errado. Tente novamente.';
-}
-
-function renderAuthScreen(){
+/* ---------- Sessão na nuvem (login anônimo automático) ----------
+   Sem tela de e-mail/senha: ao conectar, o ATLAS entra sozinho com uma
+   sessão anônima do Supabase Auth. Isso exige a opção "Anonymous
+   Sign-ins" ativada em Authentication > Providers no painel do projeto.
+   Importante: por não ter e-mail/senha, essa identidade não pode ser
+   acessada de outro aparelho — cada dispositivo/navegador que conecta
+   cria a própria sessão anônima, com os próprios dados na nuvem. */
+function renderCloudAuthErrorScreen(message){
   document.getElementById('fabAdd').style.display = 'none';
   document.querySelector('.tabbar').style.display = 'none';
   const app = document.getElementById('app');
   app.classList.add('full-screen');
   app.innerHTML = `
   <div class="auth-screen">
-    <div class="brand-mark" style="width:56px;height:56px;">${atlasMarkSVG()}</div>
+    <div class="brand-mark-glow"><div class="brand-mark">${atlasMarkSVG()}</div></div>
     <div style="text-align:center;">
       <div style="font-weight:800;font-size:19px;">ATLAS</div>
-      <div style="font-size:11.5px;color:var(--text-mute);margin-top:2px;">Seu assessor financeiro com inteligência artificial</div>
+      <div style="font-size:11.5px;color:var(--text-mute);margin-top:2px;">Não foi possível conectar à nuvem</div>
     </div>
     <div class="auth-card">
-      <div class="auth-tabs">
-        <div class="auth-tab ${authMode==='login'?'active':''}" data-auth-mode="login">Entrar</div>
-        <div class="auth-tab ${authMode==='signup'?'active':''}" data-auth-mode="signup">Criar conta</div>
-      </div>
-      <form id="authForm">
-        <div class="field"><label>E-mail</label><input required type="email" id="authEmail" placeholder="voce@email.com" /></div>
-        <div class="field"><label>Senha</label><input required type="password" id="authPassword" minlength="6" placeholder="Mínimo 6 caracteres" /></div>
-        ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
-        <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px;" ${authBusy?'disabled':''}>${authBusy?'Aguarde…':(authMode==='login'?'Entrar':'Criar conta')}</button>
-      </form>
-      ${authMode==='login' ? `<div class="link-btn" id="authForgot" style="text-align:center;margin-top:14px;">Esqueci minha senha</div>` : ''}
+      <div class="auth-error" style="margin-top:0;">${esc(message)}</div>
+      <div class="section-sub" style="margin-top:10px;">Ative em Authentication &gt; Providers &gt; Anonymous Sign-ins no painel do seu projeto Supabase, depois tente de novo.</div>
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" data-action="retry-cloud-connect">Tentar novamente</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" data-action="cloud-disconnect-fallback">Usar sem nuvem por enquanto</button>
     </div>
   </div>`;
-  document.querySelectorAll('[data-auth-mode]').forEach(el=>el.addEventListener('click', ()=>{
-    authMode = el.dataset.authMode; authError=''; renderAuthScreen();
-  }));
-  const forgot = document.getElementById('authForgot');
-  if(forgot) forgot.addEventListener('click', async ()=>{
-    const email = document.getElementById('authEmail').value.trim();
-    if(!email){ authError='Digite seu e-mail para recuperar a senha.'; renderAuthScreen(); return; }
-    try{ await sb.auth.resetPasswordForEmail(email); toast('Enviamos um link de redefinição para seu e-mail'); }
-    catch(e){ authError = 'Não foi possível enviar o e-mail de redefinição.'; renderAuthScreen(); }
-  });
-  document.getElementById('authForm').addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const email = document.getElementById('authEmail').value.trim();
-    const password = document.getElementById('authPassword').value;
-    authBusy = true; authError=''; renderAuthScreen();
-    try{
-      if(authMode==='signup'){
-        const { data, error } = await sb.auth.signUp({ email, password });
-        if(error) throw error;
-        if(!data.session){
-          authBusy=false; authMode='login'; renderAuthScreen();
-          toast('Conta criada! Confirme seu e-mail antes de entrar.');
-          return;
-        }
-        session = data.session;
-      } else {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if(error) throw error;
-        session = data.session;
-      }
-      await afterLogin();
-    }catch(err){
-      authBusy = false;
-      authError = translateAuthError(err.message);
-      renderAuthScreen();
-    }
-  });
 }
 
 async function afterLogin(){
@@ -2761,13 +2671,15 @@ async function afterLogin(){
 }
 
 async function logout(){
-  if(!confirm('Sair da sua conta ATLAS neste dispositivo?')) return;
-  await sb.auth.signOut();
+  if(!confirm('Desconectar da nuvem? Como o acesso é anônimo (sem e-mail/senha), não existe forma de voltar a esses dados depois — eles continuam salvos no Supabase, só ficam inacessíveis. Deseja continuar?')) return;
+  try{ await sb.auth.signOut(); }catch(e){}
   session = null;
+  localStorage.removeItem(SUPABASE_CONFIG_KEY);
+  localStorage.setItem(SUPABASE_SETUP_SKIPPED_KEY, '1');
+  initSupabaseClient();
   state = defaultState();
   localStorage.removeItem(STORAGE_KEY);
-  authMode = 'login'; authError=''; authBusy=false;
-  renderAuthScreen();
+  await continueBoot();
 }
 
 /* ---------- PIN lock ---------- */
@@ -2823,10 +2735,6 @@ function checkPin(){
 
 /* ---------- boot ---------- */
 async function boot(){
-  if(ACCESS_GATE_ENABLED && localStorage.getItem(GATE_STORAGE_KEY) !== '1'){
-    renderAccessGate();
-    return;
-  }
   await continueBoot();
 }
 async function continueBoot(){
@@ -2837,9 +2745,20 @@ async function continueBoot(){
   }
   if(CLOUD_ENABLED){
     const { data:{ session: s0 } } = await sb.auth.getSession();
-    session = s0;
-    if(session){ await afterLogin(); }
-    else { renderAuthScreen(); }
+    if(s0){
+      session = s0;
+      await afterLogin();
+    } else {
+      try{
+        const { data, error } = await sb.auth.signInAnonymously();
+        if(error) throw error;
+        session = data.session;
+        await afterLogin();
+      }catch(err){
+        renderCloudAuthErrorScreen(err.message || 'Não foi possível iniciar uma sessão anônima.');
+        return;
+      }
+    }
   } else {
     if(state.security.pin){ await checkPin(); }
     updateStreak();
