@@ -89,6 +89,7 @@ create table if not exists envelopes (
   icon text not null default 'box',
   color text not null default '#3987e5',
   budget numeric(14,2) not null default 0,
+  fixed boolean not null default false, -- despesa fixa (aluguel, assinaturas, dívidas) x variável
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -262,6 +263,8 @@ alter table debts add column if not exists already_debited boolean not null defa
 alter table debts add column if not exists auto_debit boolean not null default false;
 update debts set installment_amount = min_payment where installment_amount = 0 and min_payment > 0;
 update debts set original_amount = balance where original_amount = 0 and balance > 0;
+
+alter table envelopes add column if not exists fixed boolean not null default false;
 
 -- =====================================================================
 -- Fim do schema. Próximo passo (fora deste arquivo): configurar o

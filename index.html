@@ -557,7 +557,7 @@ function stateFromCloud(profile, envelopes, transactions, goals, contributions, 
   s.privacy = { hideValues: !!(profile && profile.hide_values) };
   s.appearance = { theme: (profile && profile.theme) || 'dark', customColors: (profile && profile.custom_colors) || {} };
   s.income = { monthlyBase: Number(profile && profile.monthly_income) || 0 };
-  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0 }));
+  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0, fixed:!!e.fixed }));
   s.transactions = transactions.map(t=>({ id:t.id, type:t.type, amount:Number(t.amount)||0, category:t.category, envelopeId:t.envelope_id||'', date:t.date, note:t.note||'', createdAt: new Date(t.created_at).getTime() }));
   const contribByGoal = {};
   contributions.forEach(c=>{ (contribByGoal[c.goal_id] = contribByGoal[c.goal_id]||[]).push({ date:c.date, amount:Number(c.amount)||0 }); });
@@ -688,6 +688,15 @@ function computeMetrics(){
   const score = Math.round(savingsScore+budgetScore+goalScore+streakScore);
 
   return { income, expenses, savings, savingsRate, totalBudget, spentAll, daysLeft, dayOfMonth, dim, availableToday, score, overBudgetCount };
+}
+function computeFixedVariable(){
+  const thisMonth = txForMonth(0).filter(t=>t.type==='expense');
+  let fixed=0, variable=0;
+  thisMonth.forEach(t=>{
+    const env = state.envelopes.find(e=>e.id===t.envelopeId);
+    if(env && env.fixed) fixed += t.amount; else variable += t.amount;
+  });
+  return { fixed: round2(fixed), variable: round2(variable) };
 }
 
 function requiredMonthly(goal){
@@ -910,6 +919,8 @@ function screenDashboard(){
 
   ${primaryGoal ? goalMiniCard(primaryGoal) : `<div class="card"><div class="empty" style="padding:20px 10px;"><div class="ic">◎</div><div class="t">Crie sua primeira meta financeira</div><button class="btn btn-primary" style="margin-top:14px;max-width:220px;" data-action="new-goal">Criar meta</button></div></div>`}
 
+  ${fixedVariableCard()}
+
   ${debtSummaryCard()}
 
   <div class="card glow">
@@ -1010,7 +1021,7 @@ function envelopeRowEditable(e){
   return `<div class="env-item">
     ${ring}
     <div class="env-body" data-action="edit-envelope" data-id="${e.id}" style="cursor:pointer;">
-      <div class="env-top"><span>${esc(e.name)}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
+      <div class="env-top"><span>${esc(e.name)}${e.fixed?' <span class="badge neutral" style="margin-left:4px;vertical-align:1px;">Fixo</span>':''}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
       <div class="env-meta" style="margin-top:3px;"><span>${money(spent)} de ${money(e.budget)}</span><span style="font-weight:800;color:${color}">${Math.round(pct*100)}%</span></div>
     </div>
   </div>`;
@@ -1541,6 +1552,21 @@ function debtSummaryCard(){
     <div class="bar-track" style="margin-top:10px;"><div class="bar-fill ${totalBalance>0?'critical':'good'}" style="width:${pctPaid*100}%"></div></div>
   </div>`;
 }
+function fixedVariableCard(){
+  const { fixed, variable } = computeFixedVariable();
+  const total = fixed+variable;
+  if(total<=0) return '';
+  const fixedPct = total>0 ? fixed/total : 0;
+  return `<div class="card">
+    <div class="card-head" style="margin-bottom:10px;"><div class="ic">${iconSVG('wallet',16)}</div><div class="t">Fixos x Variáveis</div></div>
+    <div class="bar-track" style="margin-bottom:12px;"><div class="bar-fill brand" style="width:${fixedPct*100}%"></div></div>
+    <div class="grid2">
+      <div class="hero-pill"><div class="lbl">FIXOS</div><div class="val">${fmtBRL(fixed)}</div></div>
+      <div class="hero-pill"><div class="lbl">VARIÁVEIS</div><div class="val">${fmtBRL(variable)}</div></div>
+    </div>
+    <div class="section-sub" style="margin-top:10px;">${(fixedPct*100).toFixed(0)}% da sua despesa do mês já está comprometida com contas fixas</div>
+  </div>`;
+}
 function screenDebts(){
   const strategy = state.ui.debtStrategy || 'avalanche';
   const debts = [...state.debts];
@@ -1651,13 +1677,27 @@ function openDebtDetail(id){
   </div>
   `);
 }
+function ensureDebtEnvelope(){
+  let env = state.envelopes.find(e=>e.name==='Dívidas');
+  const activeTotal = round2(state.debts.filter(d=>d.balance>0).reduce((s,d)=>s+(d.installmentAmount||0),0));
+  if(!env){
+    env = { id: uid(), name:'Dívidas', icon:'card', color:'#ef4a4a', budget: activeTotal, fixed:true };
+    state.envelopes.push(env);
+    cloudInsert('envelopes', { id:env.id, user_id: session?.user?.id, name:env.name, icon:env.icon, color:env.color, budget:env.budget, fixed:env.fixed });
+  } else if(env.budget !== activeTotal || !env.fixed){
+    env.budget = activeTotal; env.fixed = true;
+    cloudUpdate('envelopes', env.id, { budget: env.budget, fixed: true });
+  }
+  return env;
+}
 function payDebtInstallment(id){
   const d = state.debts.find(x=>x.id===id); if(!d || d.balance<=0) return;
   d.paidInstallments = Math.min(d.totalInstallments, (d.paidInstallments||0)+1);
   d.balance = Math.max(0, round2(d.balance - d.installmentAmount));
-  const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:'', date: todayISO(), note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name}`, createdAt: Date.now() };
+  const env = ensureDebtEnvelope();
+  const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:env.id, date: todayISO(), note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name}`, createdAt: Date.now() };
   state.transactions.push(tx);
-  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
+  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:env.id, date:tx.date, note:tx.note });
   cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:d.balance });
   updateStreak(); save(); closeModal(); render();
   const remaining = d.totalInstallments-d.paidInstallments;
@@ -1668,31 +1708,35 @@ function quitarDebt(id){
   if(d.balance<=0){ toast('Essa dívida já está quitada'); return; }
   if(!confirm(`Quitar "${d.name}" agora, lançando ${fmtBRL(d.balance)} como despesa?`)) return;
   const payoffAmount = d.balance;
-  const tx = { id: uid(), type:'expense', amount:payoffAmount, category:'Dívidas', envelopeId:'', date: todayISO(), note:`Quitação — ${d.name}`, createdAt: Date.now() };
+  const env = ensureDebtEnvelope();
+  const tx = { id: uid(), type:'expense', amount:payoffAmount, category:'Dívidas', envelopeId:env.id, date: todayISO(), note:`Quitação — ${d.name}`, createdAt: Date.now() };
   state.transactions.push(tx);
   d.balance = 0; d.paidInstallments = d.totalInstallments;
-  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
+  cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:env.id, date:tx.date, note:tx.note });
   cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:0 });
   updateStreak(); save(); closeModal(); render(); toast('Dívida quitada! 🎉');
 }
 function processAutoDebits(){
   const today = todayISO();
   let changed = false;
+  let env = null;
   state.debts.forEach(d=>{
     if(!d.autoDebit || d.balance<=0 || !d.firstDueDate) return;
-    let guard = 0;
+    let guard = 0, debtChanged = false;
     while(d.paidInstallments < d.totalInstallments && addMonthsISO(d.firstDueDate, d.paidInstallments) <= today && guard<600){
       guard++;
+      if(!env) env = ensureDebtEnvelope();
       const dueISO = addMonthsISO(d.firstDueDate, d.paidInstallments);
       d.paidInstallments += 1;
       d.balance = Math.max(0, round2(d.balance - d.installmentAmount));
-      const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:'', date: dueISO, note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name} (débito automático)`, createdAt: Date.now() };
+      const tx = { id: uid(), type:'expense', amount:d.installmentAmount, category:'Dívidas', envelopeId:env.id, date: dueISO, note:`Parcela ${d.paidInstallments}/${d.totalInstallments} — ${d.name} (débito automático)`, createdAt: Date.now() };
       state.transactions.push(tx);
-      cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:null, date:tx.date, note:tx.note });
-      changed = true;
+      cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:env.id, date:tx.date, note:tx.note });
+      changed = true; debtChanged = true;
     }
-    if(changed) cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:d.balance });
+    if(debtChanged) cloudUpdate('debts', d.id, { paid_installments:d.paidInstallments, balance:d.balance });
   });
+  if(env) ensureDebtEnvelope();
   if(changed){ updateStreak(); save(); toast('Parcela(s) de dívida debitada(s) automaticamente'); }
 }
 function simulateDebtPayoff(debts, strategy, extra){
@@ -2040,6 +2084,8 @@ function openEnvelopeForm(existing){
       ${ENVELOPE_COLORS.map(c=>`<button type="button" data-c="${c}" class="${e.color===c?'active':''}" style="background:${c}"></button>`).join('')}
     </div></div>
     <input type="hidden" id="envIcon" value="${e.icon}" /><input type="hidden" id="envColor" value="${e.color}" />
+    <div class="toggle-row"><span class="lbl">Despesa fixa</span><label class="switch"><input type="checkbox" id="envFixed" ${e.fixed?'checked':''} /><span class="track"></span></label></div>
+    <div class="section-sub" style="margin:-6px 0 4px;">Gastos fixos se repetem todo mês (aluguel, assinaturas). O Dashboard mostra separado do que é variável.</div>
     <button class="btn btn-primary btn-block" type="submit">${isEdit?'Salvar':'Criar envelope'}</button>
     ${isEdit?`<button type="button" class="btn btn-danger btn-block" style="margin-top:10px;" data-action="delete-envelope" data-id="${e.id}">Excluir envelope</button>`:''}
   </form>`);
@@ -2131,15 +2177,15 @@ function openOnboarding(){
 
 function generateDefaultEnvelopes(income){
   const plan = [
-    {name:'Moradia', icon:'home', pct:.30},
-    {name:'Alimentação', icon:'food', pct:.15},
-    {name:'Transporte', icon:'car', pct:.10},
-    {name:'Lazer', icon:'film', pct:.08},
-    {name:'Saúde', icon:'health', pct:.06},
-    {name:'Assinaturas', icon:'repeat', pct:.04},
-    {name:'Outros', icon:'box', pct:.12},
+    {name:'Moradia', icon:'home', pct:.30, fixed:true},
+    {name:'Alimentação', icon:'food', pct:.15, fixed:false},
+    {name:'Transporte', icon:'car', pct:.10, fixed:false},
+    {name:'Lazer', icon:'film', pct:.08, fixed:false},
+    {name:'Saúde', icon:'health', pct:.06, fixed:false},
+    {name:'Assinaturas', icon:'repeat', pct:.04, fixed:true},
+    {name:'Outros', icon:'box', pct:.12, fixed:false},
   ];
-  return plan.map((p,i)=>({ id: uid(), name:p.name, icon:p.icon, budget: Math.round(income*p.pct), color: ENVELOPE_COLORS[i%ENVELOPE_COLORS.length] }));
+  return plan.map((p,i)=>({ id: uid(), name:p.name, icon:p.icon, budget: Math.round(income*p.pct), color: ENVELOPE_COLORS[i%ENVELOPE_COLORS.length], fixed:p.fixed }));
 }
 
 /* ---------- event delegation ---------- */
@@ -2314,13 +2360,13 @@ document.addEventListener('submit', (e)=>{
   if(e.target.id==='envForm'){
     e.preventDefault();
     const id = e.target.dataset.id;
-    const rec = { id: id||uid(), name: document.getElementById('envName').value.trim(), budget: parseFloat(document.getElementById('envBudget').value)||0, icon: document.getElementById('envIcon').value, color: document.getElementById('envColor').value };
+    const rec = { id: id||uid(), name: document.getElementById('envName').value.trim(), budget: parseFloat(document.getElementById('envBudget').value)||0, icon: document.getElementById('envIcon').value, color: document.getElementById('envColor').value, fixed: document.getElementById('envFixed').checked };
     if(id){
       state.envelopes = state.envelopes.map(x=>x.id===id?rec:x);
-      cloudUpdate('envelopes', id, { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color });
+      cloudUpdate('envelopes', id, { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed });
     } else {
       state.envelopes.push(rec);
-      cloudInsert('envelopes', { id:rec.id, user_id: session?.user?.id, name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color });
+      cloudInsert('envelopes', { id:rec.id, user_id: session?.user?.id, name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed });
     }
     save(); closeModal(); render(); toast(id?'Envelope atualizado':'Envelope criado');
   }
