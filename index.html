@@ -558,7 +558,7 @@ function stateFromCloud(profile, envelopes, transactions, goals, contributions, 
   s.privacy = { hideValues: !!(profile && profile.hide_values) };
   s.appearance = { theme: (profile && profile.theme) || 'dark', customColors: (profile && profile.custom_colors) || {} };
   s.income = { monthlyBase: Number(profile && profile.monthly_income) || 0 };
-  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0, fixed:!!e.fixed }));
+  s.envelopes = envelopes.map(e=>({ id:e.id, name:e.name, icon:e.icon, color:e.color, budget:Number(e.budget)||0, fixed:!!e.fixed, autoLaunch:!!e.auto_launch, dueDay:e.due_day||5, lastAutoLaunch:e.last_auto_launch||null }));
   s.transactions = transactions.map(t=>({ id:t.id, type:t.type, amount:Number(t.amount)||0, category:t.category, envelopeId:t.envelope_id||'', date:t.date, note:t.note||'', createdAt: new Date(t.created_at).getTime() }));
   const contribByGoal = {};
   contributions.forEach(c=>{ (contribByGoal[c.goal_id] = contribByGoal[c.goal_id]||[]).push({ date:c.date, amount:Number(c.amount)||0 }); });
@@ -1022,7 +1022,7 @@ function envelopeRowEditable(e){
   return `<div class="env-item">
     ${ring}
     <div class="env-body" data-action="edit-envelope" data-id="${e.id}" style="cursor:pointer;">
-      <div class="env-top"><span>${esc(e.name)}${e.fixed?' <span class="badge neutral" style="margin-left:4px;vertical-align:1px;">Fixo</span>':''}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
+      <div class="env-top"><span>${esc(e.name)}${e.fixed?' <span class="badge neutral" style="margin-left:4px;vertical-align:1px;">Fixo</span>':''}${e.fixed&&e.autoLaunch?' <span class="badge neutral" style="margin-left:4px;vertical-align:1px;">Auto</span>':''}</span><span class="badge ${status==='good'?'good':status}">${statusLabel(status)}</span></div>
       <div class="env-meta" style="margin-top:3px;"><span>${money(spent)} de ${money(e.budget)}</span><span style="font-weight:800;color:${color}">${Math.round(pct*100)}%</span></div>
     </div>
   </div>`;
@@ -1740,6 +1740,25 @@ function processAutoDebits(){
   if(env) ensureDebtEnvelope();
   if(changed){ updateStreak(); save(); toast('Parcela(s) de dívida debitada(s) automaticamente'); }
 }
+function processAutoEnvelopeLaunches(){
+  const now = new Date();
+  const currentKey = monthKey(now);
+  const currentDay = now.getDate();
+  let changed = false;
+  state.envelopes.forEach(e=>{
+    if(!e.fixed || !e.autoLaunch || !e.budget) return;
+    if(e.lastAutoLaunch === currentKey) return;
+    const due = clamp(e.dueDay||5, 1, 31);
+    if(currentDay < due) return;
+    const tx = { id: uid(), type:'expense', amount:e.budget, category:e.name, envelopeId:e.id, date: todayISO(), note:`${e.name} (lançamento automático)`, createdAt: Date.now() };
+    state.transactions.push(tx);
+    cloudInsert('transactions', { id:tx.id, user_id: session?.user?.id, type:tx.type, amount:tx.amount, category:tx.category, envelope_id:e.id, date:tx.date, note:tx.note });
+    e.lastAutoLaunch = currentKey;
+    cloudUpdate('envelopes', e.id, { last_auto_launch: currentKey });
+    changed = true;
+  });
+  if(changed){ updateStreak(); save(); toast('Despesa(s) fixa(s) do mês lançada(s) automaticamente'); }
+}
 function simulateDebtPayoff(debts, strategy, extra){
   let list = debts.map(d=>({...d}));
   const order = strategy==='avalanche' ? [...list].sort((a,b)=>b.rate-a.rate) : [...list].sort((a,b)=>a.balance-b.balance);
@@ -2072,7 +2091,7 @@ function openTxForm(existing){
 
 function openEnvelopeForm(existing){
   const isEdit = !!existing;
-  const e = existing || { name:'', budget:'', icon: ENVELOPE_ICONS[0], color: ENVELOPE_COLORS[state.envelopes.length%ENVELOPE_COLORS.length] };
+  const e = existing || { name:'', budget:'', icon: ENVELOPE_ICONS[0], color: ENVELOPE_COLORS[state.envelopes.length%ENVELOPE_COLORS.length], fixed:false, autoLaunch:false, dueDay:5 };
   openModal(`
   <div class="modal-title"><span>${isEdit?'Editar envelope':'Novo envelope'}</span><span class="icon-btn" data-action="close-modal" style="width:32px;height:32px;">✕</span></div>
   <form id="envForm">
@@ -2087,9 +2106,17 @@ function openEnvelopeForm(existing){
     <input type="hidden" id="envIcon" value="${e.icon}" /><input type="hidden" id="envColor" value="${e.color}" />
     <div class="toggle-row"><span class="lbl">Despesa fixa</span><label class="switch"><input type="checkbox" id="envFixed" ${e.fixed?'checked':''} /><span class="track"></span></label></div>
     <div class="section-sub" style="margin:-6px 0 4px;">Gastos fixos se repetem todo mês (aluguel, assinaturas). O Dashboard mostra separado do que é variável.</div>
+    <div id="envFixedFieldsWrap" style="display:${e.fixed?'block':'none'};">
+      <div class="toggle-row"><span class="lbl">Lançar automaticamente todo mês</span><label class="switch"><input type="checkbox" id="envAutoLaunch" ${e.autoLaunch?'checked':''} /><span class="track"></span></label></div>
+      <div class="field"><label>Dia do lançamento</label><input type="number" min="1" max="31" id="envDueDay" value="${e.dueDay||5}" /></div>
+      <div class="section-sub" style="margin:-6px 0 4px;">No dia informado, o ATLAS lança o valor do orçamento como despesa sozinho na próxima vez que você abrir o app.</div>
+    </div>
     <button class="btn btn-primary btn-block" type="submit">${isEdit?'Salvar':'Criar envelope'}</button>
     ${isEdit?`<button type="button" class="btn btn-danger btn-block" style="margin-top:10px;" data-action="delete-envelope" data-id="${e.id}">Excluir envelope</button>`:''}
   </form>`);
+  document.getElementById('envFixed').addEventListener('change', (ev)=>{
+    document.getElementById('envFixedFieldsWrap').style.display = ev.target.checked ? 'block' : 'none';
+  });
   if(isEdit) document.getElementById('envForm').dataset.id = e.id;
 }
 
@@ -2361,13 +2388,23 @@ document.addEventListener('submit', (e)=>{
   if(e.target.id==='envForm'){
     e.preventDefault();
     const id = e.target.dataset.id;
-    const rec = { id: id||uid(), name: document.getElementById('envName').value.trim(), budget: parseFloat(document.getElementById('envBudget').value)||0, icon: document.getElementById('envIcon').value, color: document.getElementById('envColor').value, fixed: document.getElementById('envFixed').checked };
+    const existingEnv = id ? state.envelopes.find(x=>x.id===id) : null;
+    const rec = {
+      id: id||uid(), name: document.getElementById('envName').value.trim(),
+      budget: parseFloat(document.getElementById('envBudget').value)||0,
+      icon: document.getElementById('envIcon').value, color: document.getElementById('envColor').value,
+      fixed: document.getElementById('envFixed').checked,
+      autoLaunch: document.getElementById('envAutoLaunch').checked,
+      dueDay: clamp(parseInt(document.getElementById('envDueDay').value)||5, 1, 31),
+      lastAutoLaunch: existingEnv ? existingEnv.lastAutoLaunch||null : null,
+    };
+    const cloudPayload = { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed, auto_launch:rec.autoLaunch, due_day:rec.dueDay, last_auto_launch:rec.lastAutoLaunch };
     if(id){
       state.envelopes = state.envelopes.map(x=>x.id===id?rec:x);
-      cloudUpdate('envelopes', id, { name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed });
+      cloudUpdate('envelopes', id, cloudPayload);
     } else {
       state.envelopes.push(rec);
-      cloudInsert('envelopes', { id:rec.id, user_id: session?.user?.id, name:rec.name, budget:rec.budget, icon:rec.icon, color:rec.color, fixed:rec.fixed });
+      cloudInsert('envelopes', { id:rec.id, user_id: session?.user?.id, ...cloudPayload });
     }
     save(); closeModal(); render(); toast(id?'Envelope atualizado':'Envelope criado');
   }
@@ -2603,6 +2640,7 @@ async function afterLogin(){
   if(state.security.pin){ await checkPin(); }
   updateStreak();
   processAutoDebits();
+  processAutoEnvelopeLaunches();
   render();
   if(!state.onboarded){ setTimeout(openOnboarding, 350); }
 }
@@ -2687,6 +2725,7 @@ async function continueBoot(){
     if(state.security.pin){ await checkPin(); }
     updateStreak();
     processAutoDebits();
+    processAutoEnvelopeLaunches();
     render();
     if(!state.onboarded){ setTimeout(openOnboarding, 350); }
   }

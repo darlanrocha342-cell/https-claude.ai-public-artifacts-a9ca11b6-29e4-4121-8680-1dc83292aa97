@@ -90,6 +90,9 @@ create table if not exists envelopes (
   color text not null default '#3987e5',
   budget numeric(14,2) not null default 0,
   fixed boolean not null default false, -- despesa fixa (aluguel, assinaturas, dívidas) x variável
+  auto_launch boolean not null default false, -- lança o orçamento como despesa sozinho todo mês
+  due_day smallint not null default 5, -- dia do mês do lançamento automático
+  last_auto_launch text, -- 'YYYY-MM' do último lançamento automático feito, evita duplicar no mesmo mês
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -265,6 +268,9 @@ update debts set installment_amount = min_payment where installment_amount = 0 a
 update debts set original_amount = balance where original_amount = 0 and balance > 0;
 
 alter table envelopes add column if not exists fixed boolean not null default false;
+alter table envelopes add column if not exists auto_launch boolean not null default false;
+alter table envelopes add column if not exists due_day smallint not null default 5;
+alter table envelopes add column if not exists last_auto_launch text;
 
 -- =====================================================================
 -- Fim do schema. Próximo passo (fora deste arquivo): configurar o
