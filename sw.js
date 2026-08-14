@@ -1,4 +1,4 @@
-var CACHE_NAME = "zenite-cache-v1";
+var CACHE_NAME = "atlas-cache-v1";
 var APP_SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", function (event) {
@@ -49,6 +49,33 @@ self.addEventListener("fetch", function (event) {
         })
         .catch(function () { return cached; });
       return cached || networkFetch;
+    })
+  );
+});
+
+self.addEventListener("push", function (event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: "ATLAS", body: event.data ? event.data.text() : "" }; }
+  var title = data.title || "ATLAS";
+  var options = {
+    body: data.body || "",
+    icon: "icons/android-chrome-192x192.png",
+    badge: "icons/favicon-32x32.png",
+    tag: data.tag || "atlas-notification",
+    data: { url: data.url || "./" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || "./";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        if ("focus" in clientList[i]) return clientList[i].focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
     })
   );
 });

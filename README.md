@@ -94,12 +94,16 @@ com `user_id` e Row Level Security — cada pessoa só acessa os próprios dados
    (ícone de cadeado).
 2. Em **Project Settings > API**, copie a **Project URL** e a chave
    **anon / public** (não é secreta — pode ficar no código do front-end).
-3. Abra `index.html`, procure por `SUPABASE_URL` e `SUPABASE_ANON_KEY`
-   (logo no início do `<script>`) e cole os dois valores. Salve — pronto,
-   o app passa a mostrar a tela de login em vez de ir direto pro app.
+3. Abra o ATLAS no navegador: a primeira tela pede exatamente esses dois
+   valores (Project URL + chave anon). Cole e toque em **Conectar** —
+   nada de editar código. O app entra sozinho com uma sessão anônima do
+   Supabase Auth (é preciso ativar **Authentication > Providers >
+   Anonymous Sign-ins** no painel do projeto para isso funcionar).
 
-Enquanto esses dois valores não forem preenchidos, o ATLAS continua
-funcionando 100% local (sem tela de login), como antes.
+Enquanto não conectar, ou se tocar em "Usar sem nuvem por enquanto", o
+ATLAS continua funcionando 100% local, como antes. Por não usar
+e-mail/senha, cada aparelho que conecta cria sua própria sessão —
+não há como acessar os mesmos dados de dois aparelhos diferentes.
 
 **Já rodou o schema antes (versão antiga da tabela `debts`)?** A tabela de
 dívidas ganhou colunas novas (categoria, instituição, parcelas, débito
@@ -113,9 +117,87 @@ Providers > Email > Confirm email** se quiser testar mais rápido.
 **Limitação conhecida:** Exportar/Importar dados (em Configurações) ainda
 trabalha só com o cache local (`localStorage`), não lê/escreve na nuvem.
 
+## Notificações push (avisos no celular)
+
+O ATLAS manda uma notificação push de verdade — aparece no celular mesmo
+com o app fechado — um dia antes de uma parcela de dívida ou de uma
+despesa fixa vencer. Precisa de nuvem conectada (usa a mesma tabela de
+usuários) e de uma peça de servidor: uma Edge Function do Supabase que
+roda uma vez por dia e dispara os avisos.
+
+**O que já está pronto no projeto** (não precisa mexer):
+- `sw.js` — o Service Worker já sabe receber a notificação e mostrá-la.
+- `index.html` — tela de Configurações com o botão "Ativar notificações"
+  (só aparece com a nuvem conectada), que pede permissão ao navegador e
+  salva a inscrição na tabela `push_subscriptions`.
+- `supabase_schema.sql` — já tem a tabela `push_subscriptions` com RLS.
+- `supabase/functions/send-due-notifications/index.ts` — o código da
+  Edge Function que verifica os vencimentos e envia os avisos.
+
+**O que só você consegue fazer (painel do Supabase), passo a passo:**
+
+1. **Rode o SQL da tabela nova** (se já rodou o schema antes): abra
+   `supabase_schema.sql`, ache a tabela `push_subscriptions` e rode esse
+   bloco no SQL Editor (é seguro, usa `create table if not exists`).
+
+2. **Instale a Supabase CLI** no seu computador (uma vez só):
+   `npm install -g supabase` (ou veja outras opções em
+   [supabase.com/docs/guides/cli](https://supabase.com/docs/guides/cli)).
+
+3. **Faça login e vincule o projeto**, dentro da pasta do ATLAS:
+   ```
+   supabase login
+   supabase link --project-ref SEU_PROJECT_REF
+   ```
+   (o `PROJECT_REF` é o trecho antes de `.supabase.co` na sua Project URL).
+
+4. **Configure os segredos da função** — a chave VAPID *privada* nunca
+   pode ir no código do app, só aqui:
+   ```
+   supabase secrets set VAPID_PUBLIC_KEY=BMDSm8Ewf2-xDPTCRu9rd6dr3WIanWQsJtObsMikwJ9Ow23WsH0Ho69zQgm3sIbJo8_5RHOGHOd8YVIL5EFo-fo
+   supabase secrets set VAPID_PRIVATE_KEY=ztqfkhiE0QBIlNASanT65CahUOr1rqRMs-1H2R9NaHc
+   ```
+   (esse par já está pronto e é o mesmo usado em `index.html` — se quiser
+   gerar um novo par, qualquer gerador de chaves VAPID serve, só troque
+   nos dois lugares.)
+
+5. **Publique a função**:
+   ```
+   supabase functions deploy send-due-notifications
+   ```
+
+6. **Agende para rodar todo dia**, no SQL Editor do painel:
+   ```sql
+   create extension if not exists pg_cron with schema extensions;
+   create extension if not exists pg_net with schema extensions;
+
+   select cron.schedule(
+     'atlas-send-due-notifications',
+     '0 12 * * *', -- 12:00 UTC = 09:00 em Brasília
+     $$
+     select net.http_post(
+       url := 'https://SEU_PROJECT_REF.supabase.co/functions/v1/send-due-notifications',
+       headers := jsonb_build_object('Authorization', 'Bearer SUA_SERVICE_ROLE_KEY', 'Content-Type', 'application/json')
+     );
+     $$
+   );
+   ```
+   Troque `SEU_PROJECT_REF` pelo mesmo da Project URL, e
+   `SUA_SERVICE_ROLE_KEY` pela chave em **Project Settings > API >
+   service_role** (essa sim é secreta — nunca cole no `index.html`).
+
+7. **Ative no app**: abra o ATLAS, vá em **Configurações > Notificações
+   push > Ativar notificações**, e aceite a permissão do navegador.
+   No iPhone, o Safari só permite push depois de "Adicionar à Tela de
+   Início" (compartilhar → Adicionar à Tela de Início) — abra o ATLAS
+   pelo ícone criado, não pelo Safari direto, antes de ativar.
+
+**Testar sem esperar um dia de verdade:** com a CLI logada, rode
+`supabase functions invoke send-due-notifications` a qualquer momento —
+ele já verifica os vencimentos de "amanhã" na hora.
+
 ## Roadmap sugerido
 
-- Sincronização em nuvem com Supabase (schema pronto — ver seção acima)
 - Calendário financeiro (contas a vencer, parcelas, assinaturas)
 - Módulo de investimentos (renda fixa, ações, cripto, rentabilidade)
 - Simulador "e se" (alterar renda, gastos, metas e ver o impacto na hora)
