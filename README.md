@@ -196,6 +196,94 @@ roda uma vez por dia e dispara os avisos.
 `supabase functions invoke send-due-notifications` a qualquer momento —
 ele já verifica os vencimentos de "amanhã" na hora.
 
+## Relatório semanal por WhatsApp
+
+O ATLAS manda, toda semana, um resumo financeiro (receitas, despesas,
+envelopes no limite, progresso das metas e contas vencendo nos próximos
+7 dias) direto no WhatsApp. O envio usa o [Twilio](https://twilio.com),
+que tem um modo "Sandbox" gratuito — dá pra testar hoje mesmo, sem
+cadastro de negócio.
+
+**O que já está pronto no projeto** (não precisa mexer):
+- `supabase_schema.sql` — colunas `whatsapp_number` e
+  `whatsapp_reports_enabled` na tabela `profiles`.
+- `index.html` — tela de Configurações com o card "Relatório semanal
+  por WhatsApp", onde você cadastra seu número.
+- `supabase/functions/send-weekly-report/index.ts` — a Edge Function
+  que monta o resumo e envia via Twilio.
+
+**O que só você consegue fazer, passo a passo:**
+
+1. **Rode o SQL das colunas novas** (se já rodou o schema antes): abra
+   `supabase_schema.sql`, ache o bloco "MIGRAÇÃO" no final e rode no
+   SQL Editor (é seguro, usa `add column if not exists`).
+
+2. **Crie uma conta grátis no [Twilio](https://www.twilio.com/try-twilio)**.
+   No Console (painel inicial), copie o **Account SID** e o **Auth
+   Token** — ficam visíveis assim que você entra.
+
+3. **Ative o WhatsApp Sandbox**: no menu lateral do Twilio, vá em
+   **Messaging > Try it out > Send a WhatsApp message**. Vai aparecer
+   um número do Twilio e um código tipo `join palavra-exemplo`.
+
+4. **Do seu celular, mande esse `join ...` pelo WhatsApp** para o
+   número do sandbox mostrado na tela. Isso libera o SEU número a
+   receber mensagens do sandbox — sem esse passo, nada chega.
+   **Atenção:** no modo sandbox (grátis), esse "join" expira depois de
+   alguns dias de inatividade — se as mensagens pararem de chegar,
+   é só mandar o `join ...` de novo.
+
+5. **Configure os segredos da função**, no painel do Supabase em
+   **Edge Functions > Secrets** (ou via CLI):
+   ```
+   supabase secrets set TWILIO_ACCOUNT_SID=SEU_ACCOUNT_SID
+   supabase secrets set TWILIO_AUTH_TOKEN=SEU_AUTH_TOKEN
+   supabase secrets set TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ```
+   (o número `+14155238886` é o padrão do sandbox do Twilio — troque
+   pelo que aparecer na sua tela do passo 3, se for diferente.)
+
+6. **Publique a função `send-weekly-report`**: pela CLI
+   (`supabase functions deploy send-weekly-report`) ou copiando o
+   conteúdo de `supabase/functions/send-weekly-report/index.ts` no
+   editor web do painel do Supabase (Edge Functions > Create a new
+   function), mesmo processo já usado para `send-due-notifications`.
+
+7. **Agende para rodar toda segunda-feira**, no SQL Editor:
+   ```sql
+   select cron.schedule(
+     'atlas-send-weekly-report',
+     '0 12 * * 1', -- 12:00 UTC de segunda = 09:00 em Brasília
+     $$
+     select net.http_post(
+       url := 'https://SEU_PROJECT_REF.supabase.co/functions/v1/send-weekly-report',
+       headers := jsonb_build_object('Authorization', 'Bearer SUA_SERVICE_ROLE_KEY', 'Content-Type', 'application/json')
+     );
+     $$
+   );
+   ```
+   Troque `SEU_PROJECT_REF` e `SUA_SERVICE_ROLE_KEY` do mesmo jeito
+   feito para o cron das notificações push.
+
+8. **Ative no app**: abra o ATLAS, vá em **Configurações > Relatório
+   semanal por WhatsApp**, digite seu número com DDI e DDD (formato
+   `+5511912345678`) e toque em **Ativar relatório semanal**.
+
+**Testar sem esperar até segunda:** no painel do Supabase, abra
+**Edge Functions > send-weekly-report > Test** e clique em enviar —
+ele já manda o resumo na hora pra quem estiver com o relatório
+ativado (mesmo fluxo de teste já usado nas notificações push).
+
+**Importante — sandbox x produção:** o modo sandbox do Twilio é
+gratuito e ótimo pra uso pessoal (é literalmente o seu caso: você
+mandando relatório pro seu próprio WhatsApp), mas tem essas
+limitações: só entrega pra números que deram "join" no sandbox, e o
+Twilio mostra um aviso de "sandbox" nas primeiras mensagens de cada
+sessão. Pra tirar essas limitações (número de WhatsApp Business
+próprio, sem aviso de sandbox), o Twilio exige aprovação de um
+número comercial — não é necessário pra este uso, só vale a pena se
+um dia isso virar um produto pra outras pessoas usarem.
+
 ## Roadmap sugerido
 
 - Calendário financeiro (contas a vencer, parcelas, assinaturas)

@@ -618,7 +618,7 @@ function defaultState(){
   return {
     version: 1,
     onboarded: false,
-    profile: { name:'', currency:'BRL', createdAt: todayISO() },
+    profile: { name:'', currency:'BRL', createdAt: todayISO(), whatsappNumber:'', whatsappReportsEnabled:false },
     security: { pin: null },
     privacy: { hideValues:false },
     appearance: { theme: 'dark', customColors: {} },
@@ -654,7 +654,7 @@ function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function stateFromCloud(profile, envelopes, transactions, goals, contributions, debts){
   const s = defaultState();
   s.onboarded = !!(profile && profile.onboarded);
-  s.profile = { name: (profile && profile.name) || '', currency: (profile && profile.currency) || 'BRL', createdAt: (profile && profile.created_at || '').slice(0,10) || todayISO() };
+  s.profile = { name: (profile && profile.name) || '', currency: (profile && profile.currency) || 'BRL', createdAt: (profile && profile.created_at || '').slice(0,10) || todayISO(), whatsappNumber: (profile && profile.whatsapp_number) || '', whatsappReportsEnabled: !!(profile && profile.whatsapp_reports_enabled) };
   s.security = { pin: (profile && profile.pin_hash) || null };
   s.privacy = { hideValues: !!(profile && profile.hide_values) };
   s.appearance = { theme: (profile && profile.theme) || 'dark', customColors: (profile && profile.custom_colors) || {} };
@@ -1962,6 +1962,13 @@ function screenSettings(){
       <div class="card-row" style="padding:8px 0;"><span>Avisos de parcelas e contas fixas no seu aparelho</span><span class="badge neutral">Desativado</span></div>
       <button class="btn btn-primary btn-block" data-action="enable-push">Ativar notificações</button>
     `}
+  </div>
+  <div class="card">
+    <div class="card-title">RELATÓRIO SEMANAL POR WHATSAPP</div>
+    <div class="card-row" style="padding:8px 0;"><span>Resumo toda segunda-feira no seu WhatsApp</span><span class="badge ${state.profile.whatsappReportsEnabled?'good':'neutral'}">${state.profile.whatsappReportsEnabled?'Ativo':'Desativado'}</span></div>
+    <div class="field"><label>Número do WhatsApp (com DDI e DDD)</label><input type="tel" id="setWhatsapp" placeholder="+55 11 91234-5678" value="${esc(state.profile.whatsappNumber||'')}" /></div>
+    <button class="btn btn-primary btn-sm" data-action="save-whatsapp">${state.profile.whatsappReportsEnabled?'Salvar número':'Ativar relatório semanal'}</button>
+    ${state.profile.whatsappReportsEnabled ? `<button class="btn btn-ghost btn-sm" data-action="disable-whatsapp-report" style="margin-top:8px;">Desativar</button>` : ''}
   </div>` : ''}
   <div class="card">
     <div class="card-title">PERFIL</div>
@@ -2494,6 +2501,22 @@ document.addEventListener('click', (e)=>{
       break;
     case 'enable-push': subscribeToPush(); break;
     case 'disable-push': unsubscribeFromPush(); break;
+    case 'save-whatsapp': {
+      const raw = document.getElementById('setWhatsapp').value.trim();
+      const digits = raw.replace(/[^\d+]/g,'');
+      if(!/^\+\d{10,15}$/.test(digits)){ toast('Número inválido. Use o formato +55DDDNÚMERO, ex: +5511912345678'); break; }
+      state.profile.whatsappNumber = digits;
+      state.profile.whatsappReportsEnabled = true;
+      save(); render(); toast('Relatório semanal ativado!');
+      cloudUpdateProfile({ whatsapp_number: digits, whatsapp_reports_enabled: true });
+      break;
+    }
+    case 'disable-whatsapp-report': {
+      state.profile.whatsappReportsEnabled = false;
+      save(); render(); toast('Relatório semanal desativado');
+      cloudUpdateProfile({ whatsapp_reports_enabled: false });
+      break;
+    }
   }
 
   // icon/color pickers inside forms

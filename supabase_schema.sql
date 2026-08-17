@@ -38,6 +38,10 @@ create table if not exists profiles (
   hide_values boolean not null default false,
   pin_hash text, -- SHA-256 do PIN, calculado no cliente; nunca texto puro
 
+  -- relatório semanal por WhatsApp
+  whatsapp_number text, -- formato E.164, ex: +5511912345678
+  whatsapp_reports_enabled boolean not null default false,
+
   -- aparência
   theme text not null default 'dark' check (theme in ('light','dark','system')),
   custom_colors jsonb not null default '{}'::jsonb,
@@ -298,6 +302,9 @@ alter table envelopes add column if not exists auto_launch boolean not null defa
 alter table envelopes add column if not exists due_day smallint not null default 5;
 alter table envelopes add column if not exists projected_amount numeric(14,2) not null default 0;
 alter table envelopes add column if not exists last_auto_launch text;
+
+alter table profiles add column if not exists whatsapp_number text;
+alter table profiles add column if not exists whatsapp_reports_enabled boolean not null default false;
 
 -- =====================================================================
 -- Fim do schema. Próximo passo (fora deste arquivo): configurar o
