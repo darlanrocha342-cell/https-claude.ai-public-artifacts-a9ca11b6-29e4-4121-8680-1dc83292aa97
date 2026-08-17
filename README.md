@@ -196,21 +196,26 @@ roda uma vez por dia e dispara os avisos.
 `supabase functions invoke send-due-notifications` a qualquer momento —
 ele já verifica os vencimentos de "amanhã" na hora.
 
-## Relatório semanal por WhatsApp
+## Relatório diário por WhatsApp
 
-O ATLAS manda, toda semana, um resumo financeiro (receitas, despesas,
-envelopes no limite, progresso das metas e contas vencendo nos próximos
-7 dias) direto no WhatsApp. O envio usa o [Twilio](https://twilio.com),
-que tem um modo "Sandbox" gratuito — dá pra testar hoje mesmo, sem
-cadastro de negócio.
+O ATLAS manda, todo dia pela manhã, um resumo financeiro (receitas e
+despesas de ontem, envelopes no limite, progresso das metas e contas
+vencendo hoje/amanhã) direto no WhatsApp. O envio usa o
+[Twilio](https://twilio.com), que tem um modo "Sandbox" gratuito — dá
+pra testar hoje mesmo, sem cadastro de negócio.
 
 **O que já está pronto no projeto** (não precisa mexer):
 - `supabase_schema.sql` — colunas `whatsapp_number` e
   `whatsapp_reports_enabled` na tabela `profiles`.
-- `index.html` — tela de Configurações com o card "Relatório semanal
-  por WhatsApp", onde você cadastra seu número.
+- `index.html` — o card "Receba seu relatório diário no WhatsApp"
+  aparece logo na tela Início até você cadastrar o número (some
+  sozinho depois de ativado); também dá pra gerenciar em
+  **Configurações > Relatório diário por WhatsApp**.
 - `supabase/functions/send-weekly-report/index.ts` — a Edge Function
-  que monta o resumo e envia via Twilio.
+  que monta o resumo e envia via Twilio. **O nome do arquivo/função
+  ficou `send-weekly-report` por motivo histórico** (era semanal
+  antes) — o conteúdo já manda diário, só não renomeamos pra não
+  obrigar recriar a function e os secrets do zero no Supabase.
 
 **O que só você consegue fazer, passo a passo:**
 
@@ -249,11 +254,11 @@ cadastro de negócio.
    editor web do painel do Supabase (Edge Functions > Create a new
    function), mesmo processo já usado para `send-due-notifications`.
 
-7. **Agende para rodar toda segunda-feira**, no SQL Editor:
+7. **Agende para rodar todo dia**, no SQL Editor:
    ```sql
    select cron.schedule(
-     'atlas-send-weekly-report',
-     '0 12 * * 1', -- 12:00 UTC de segunda = 09:00 em Brasília
+     'atlas-send-daily-report',
+     '0 12 * * *', -- 12:00 UTC = 09:00 em Brasília, todo dia
      $$
      select net.http_post(
        url := 'https://SEU_PROJECT_REF.supabase.co/functions/v1/send-weekly-report',
@@ -263,13 +268,23 @@ cadastro de negócio.
    );
    ```
    Troque `SEU_PROJECT_REF` e `SUA_SERVICE_ROLE_KEY` do mesmo jeito
-   feito para o cron das notificações push.
+   feito para o cron das notificações push. Repare que a URL continua
+   apontando pra `send-weekly-report` (o nome real da function no
+   Supabase) mesmo o job se chamando `atlas-send-daily-report`.
 
-8. **Ative no app**: abra o ATLAS, vá em **Configurações > Relatório
-   semanal por WhatsApp**, digite seu número com DDI e DDD (formato
-   `+5511912345678`) e toque em **Ativar relatório semanal**.
+   Se você já tinha criado o `atlas-send-weekly-report` semanal antes,
+   apague-o primeiro pra não rodar os dois:
+   ```sql
+   select cron.unschedule('atlas-send-weekly-report');
+   ```
 
-**Testar sem esperar até segunda:** no painel do Supabase, abra
+8. **Ative no app**: abra o ATLAS — o card **"Receba seu relatório
+   diário no WhatsApp"** já aparece direto na tela Início. Digite seu
+   número com DDI e DDD (formato `+5511912345678`) e toque em
+   **Ativar relatório diário**. (Também dá pra fazer isso depois em
+   Configurações, se pular esse passo agora.)
+
+**Testar sem esperar o dia seguinte:** no painel do Supabase, abra
 **Edge Functions > send-weekly-report > Test** e clique em enviar —
 ele já manda o resumo na hora pra quem estiver com o relatório
 ativado (mesmo fluxo de teste já usado nas notificações push).

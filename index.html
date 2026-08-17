@@ -430,6 +430,7 @@ const todayISO = () => new Date().toISOString().slice(0,10);
    configuradas, o ATLAS continua funcionando 100% local — nada quebra. */
 const SUPABASE_CONFIG_KEY = 'atlas_supabase_config_v1';
 const SUPABASE_SETUP_SKIPPED_KEY = 'atlas_supabase_setup_skipped_v1';
+const WHATSAPP_NUDGE_DISMISSED_KEY = 'atlas_whatsapp_nudge_dismissed_v1';
 function getSupabaseConfig(){
   try{
     const raw = localStorage.getItem(SUPABASE_CONFIG_KEY);
@@ -697,6 +698,15 @@ async function cloudUpdateProfile(patch){
   if(!CLOUD_ENABLED || !session) return;
   try{ await sb.from('profiles').update(patch).eq('id', session.user.id); }
   catch(e){ console.warn('falha ao sincronizar perfil', e); }
+}
+function saveWhatsappNumber(raw){
+  const digits = (raw||'').trim().replace(/[^\d+]/g,'');
+  if(!/^\+\d{10,15}$/.test(digits)){ toast('Número inválido. Use o formato +55DDDNÚMERO, ex: +5511912345678'); return false; }
+  state.profile.whatsappNumber = digits;
+  state.profile.whatsappReportsEnabled = true;
+  save();
+  cloudUpdateProfile({ whatsapp_number: digits, whatsapp_reports_enabled: true });
+  return true;
 }
 async function cloudInsert(table, row){
   if(!CLOUD_ENABLED || !session) return;
@@ -1002,8 +1012,21 @@ function screenDashboard(){
   const recentTx = [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).slice(0,5);
   const topEnvelopes = [...state.envelopes].sort((a,b)=> (envelopeSpent(b.id,0)/(b.budget||1)) - (envelopeSpent(a.id,0)/(a.budget||1)) ).slice(0,4);
   const primaryGoal = state.goals[0];
+  const showWhatsappNudge = CLOUD_ENABLED && session && !state.profile.whatsappReportsEnabled && localStorage.getItem(WHATSAPP_NUDGE_DISMISSED_KEY) !== '1';
 
   return `
+  ${showWhatsappNudge ? `
+  <div class="card glow">
+    <div class="card-row" style="margin-bottom:6px;">
+      <div class="card-head"><div class="ic">💬</div><div class="t">Receba seu relatório diário no WhatsApp</div></div>
+      <span class="link-btn" data-action="dismiss-whatsapp-nudge">agora não</span>
+    </div>
+    <div class="section-sub" style="margin:0 0 10px;">Resumo dos seus gastos, envelopes no limite e contas vencendo — todo dia, direto no seu celular.</div>
+    <div class="field" style="margin-bottom:10px;"><input type="tel" id="dashWhatsapp" placeholder="+55 11 91234-5678" /></div>
+    <button class="btn btn-primary btn-block" data-action="save-whatsapp-dashboard">Ativar relatório diário</button>
+  </div>
+  ` : ''}
+
   <div class="card glow hero">
     <div class="card-row">
       <div class="card-head"><div class="ic">${iconSVG('chart',17)}</div><div class="t">Saldo do mês</div></div>
@@ -1964,10 +1987,10 @@ function screenSettings(){
     `}
   </div>
   <div class="card">
-    <div class="card-title">RELATÓRIO SEMANAL POR WHATSAPP</div>
-    <div class="card-row" style="padding:8px 0;"><span>Resumo toda segunda-feira no seu WhatsApp</span><span class="badge ${state.profile.whatsappReportsEnabled?'good':'neutral'}">${state.profile.whatsappReportsEnabled?'Ativo':'Desativado'}</span></div>
+    <div class="card-title">RELATÓRIO DIÁRIO POR WHATSAPP</div>
+    <div class="card-row" style="padding:8px 0;"><span>Resumo todo dia pela manhã no seu WhatsApp</span><span class="badge ${state.profile.whatsappReportsEnabled?'good':'neutral'}">${state.profile.whatsappReportsEnabled?'Ativo':'Desativado'}</span></div>
     <div class="field"><label>Número do WhatsApp (com DDI e DDD)</label><input type="tel" id="setWhatsapp" placeholder="+55 11 91234-5678" value="${esc(state.profile.whatsappNumber||'')}" /></div>
-    <button class="btn btn-primary btn-sm" data-action="save-whatsapp">${state.profile.whatsappReportsEnabled?'Salvar número':'Ativar relatório semanal'}</button>
+    <button class="btn btn-primary btn-sm" data-action="save-whatsapp">${state.profile.whatsappReportsEnabled?'Salvar número':'Ativar relatório diário'}</button>
     ${state.profile.whatsappReportsEnabled ? `<button class="btn btn-ghost btn-sm" data-action="disable-whatsapp-report" style="margin-top:8px;">Desativar</button>` : ''}
   </div>` : ''}
   <div class="card">
@@ -2502,18 +2525,19 @@ document.addEventListener('click', (e)=>{
     case 'enable-push': subscribeToPush(); break;
     case 'disable-push': unsubscribeFromPush(); break;
     case 'save-whatsapp': {
-      const raw = document.getElementById('setWhatsapp').value.trim();
-      const digits = raw.replace(/[^\d+]/g,'');
-      if(!/^\+\d{10,15}$/.test(digits)){ toast('Número inválido. Use o formato +55DDDNÚMERO, ex: +5511912345678'); break; }
-      state.profile.whatsappNumber = digits;
-      state.profile.whatsappReportsEnabled = true;
-      save(); render(); toast('Relatório semanal ativado!');
-      cloudUpdateProfile({ whatsapp_number: digits, whatsapp_reports_enabled: true });
+      if(saveWhatsappNumber(document.getElementById('setWhatsapp').value)){ render(); toast('Relatório diário ativado!'); }
       break;
+    }
+    case 'save-whatsapp-dashboard': {
+      if(saveWhatsappNumber(document.getElementById('dashWhatsapp').value)){ render(); toast('Relatório diário ativado!'); }
+      break;
+    }
+    case 'dismiss-whatsapp-nudge': {
+      localStorage.setItem(WHATSAPP_NUDGE_DISMISSED_KEY, '1'); render(); break;
     }
     case 'disable-whatsapp-report': {
       state.profile.whatsappReportsEnabled = false;
-      save(); render(); toast('Relatório semanal desativado');
+      save(); render(); toast('Relatório diário desativado');
       cloudUpdateProfile({ whatsapp_reports_enabled: false });
       break;
     }

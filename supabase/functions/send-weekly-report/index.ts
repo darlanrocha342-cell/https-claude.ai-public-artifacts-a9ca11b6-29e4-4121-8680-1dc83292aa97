@@ -1,9 +1,12 @@
 // ATLAS — Edge Function: send-weekly-report
+// (nome histórico — a função hoje manda um relatório DIÁRIO, não semanal;
+// mantido assim pra não obrigar recriar a function/secrets no Supabase)
 //
-// Roda uma vez por semana (agendada via pg_cron, ver README da pasta
-// supabase/). Para cada usuário com relatório semanal ativado, monta um
-// resumo financeiro dos últimos 7 dias (receitas, despesas, envelopes no
-// limite, metas, contas vencendo) e manda por WhatsApp via Twilio.
+// Roda uma vez por dia (agendada via pg_cron, ver README da pasta
+// supabase/). Para cada usuário com relatório diário ativado, monta um
+// resumo financeiro do dia anterior (receitas, despesas, envelopes no
+// limite, metas, contas vencendo hoje/amanhã) e manda por WhatsApp via
+// Twilio.
 //
 // Segredos necessários (Project Settings > Edge Functions > Secrets):
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM
@@ -76,7 +79,7 @@ function buildEnvelopeAlerts(envelopes: Envelope[], monthTx: Tx[]): string[] {
 
 function buildUpcoming(envelopes: Envelope[], debts: Debt[], today: string): string[] {
   const items: string[] = [];
-  const windowDates = Array.from({ length: 7 }, (_, i) => addDaysISO(today, i));
+  const windowDates = [today, addDaysISO(today, 1)]; // hoje e amanhã
 
   for (const d of debts) {
     if (!d.first_due_date || d.balance <= 0) continue;
@@ -112,27 +115,26 @@ function buildGoalsLines(goals: Goal[]): string[] {
 
 function buildMessage(params: {
   name: string;
-  weekStart: string;
-  weekEnd: string;
+  yesterday: string;
   income: number;
   expense: number;
   alerts: string[];
   upcoming: string[];
   goalsLines: string[];
 }): string {
-  const { name, weekStart, weekEnd, income, expense, alerts, upcoming, goalsLines } = params;
+  const { name, yesterday, income, expense, alerts, upcoming, goalsLines } = params;
   const balance = income - expense;
   const lines: string[] = [];
-  lines.push(`📊 *ATLAS — Resumo da semana*`);
-  lines.push(`${fmtDateBR(weekStart)} a ${fmtDateBR(weekEnd)}${name ? `, ${name}` : ""}`);
+  lines.push(`📊 *ATLAS — Resumo diário*`);
+  lines.push(`Ontem, ${fmtDateBR(yesterday)}${name ? `, ${name}` : ""}`);
   lines.push("");
   lines.push(`💰 Receitas: ${fmtBRL(income)}`);
   lines.push(`💸 Despesas: ${fmtBRL(expense)}`);
-  lines.push(`📈 Saldo da semana: ${fmtBRL(balance)}`);
+  lines.push(`📈 Saldo do dia: ${fmtBRL(balance)}`);
 
   if (alerts.length) {
     lines.push("");
-    lines.push("*Envelopes no limite:*");
+    lines.push("*Envelopes no limite (mês):*");
     lines.push(...alerts);
   }
 
@@ -144,7 +146,7 @@ function buildMessage(params: {
 
   if (upcoming.length) {
     lines.push("");
-    lines.push("*Vencendo nos próximos 7 dias:*");
+    lines.push("*Vencendo hoje/amanhã:*");
     lines.push(...upcoming);
   }
 
@@ -177,8 +179,7 @@ async function sendWhatsApp(to: string, body: string): Promise<boolean> {
 
 Deno.serve(async (_req: Request) => {
   const today = new Date().toISOString().slice(0, 10);
-  const weekStart = addDaysISO(today, -7);
-  const weekEnd = addDaysISO(today, -1);
+  const yesterday = addDaysISO(today, -1);
   const monthStart = today.slice(0, 8) + "01";
   let reportsSent = 0;
 
@@ -191,28 +192,28 @@ Deno.serve(async (_req: Request) => {
 
   for (const p of profiles ?? []) {
     try {
-      const [envRes, weekTxRes, monthTxRes, goalsRes, debtsRes] = await Promise.all([
+      const [envRes, dayTxRes, monthTxRes, goalsRes, debtsRes] = await Promise.all([
         admin.from("envelopes").select("*").eq("user_id", p.id),
-        admin.from("transactions").select("type, amount, envelope_id, date").eq("user_id", p.id).gte("date", weekStart).lte("date", weekEnd),
+        admin.from("transactions").select("type, amount, envelope_id, date").eq("user_id", p.id).eq("date", yesterday),
         admin.from("transactions").select("type, amount, envelope_id, date").eq("user_id", p.id).gte("date", monthStart).lte("date", today),
         admin.from("goals").select("name, target, saved").eq("user_id", p.id),
         admin.from("debts").select("name, balance, installment_amount, first_due_date, paid_installments").eq("user_id", p.id),
       ]);
 
       const envelopes = (envRes.data ?? []) as Envelope[];
-      const weekTx = (weekTxRes.data ?? []) as Tx[];
+      const dayTx = (dayTxRes.data ?? []) as Tx[];
       const monthTx = (monthTxRes.data ?? []) as Tx[];
       const goals = (goalsRes.data ?? []) as Goal[];
       const debts = (debtsRes.data ?? []) as Debt[];
 
-      const income = weekTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-      const expense = weekTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+      const income = dayTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+      const expense = dayTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
 
       const alerts = buildEnvelopeAlerts(envelopes, monthTx);
       const upcoming = buildUpcoming(envelopes, debts, today);
       const goalsLines = buildGoalsLines(goals);
 
-      const message = buildMessage({ name: p.name || "", weekStart, weekEnd, income, expense, alerts, upcoming, goalsLines });
+      const message = buildMessage({ name: p.name || "", yesterday, income, expense, alerts, upcoming, goalsLines });
       const ok = await sendWhatsApp(p.whatsapp_number, message);
       if (ok) reportsSent++;
     } catch (err: any) {
