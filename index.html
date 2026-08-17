@@ -370,7 +370,7 @@ table.datatable td{ padding:7px 4px; border-bottom:1px solid var(--border-soft);
 .drawer-footer-name{ font-size:12.5px; font-weight:700; color:var(--text-dim); }
 .drawer-footer-sub{ font-size:10.5px; color:var(--text-mute); margin-top:2px; }
 .pin-key:active{ background: var(--surface); }
-.toast{ position:fixed; left:50%; bottom:calc(110px + var(--safe-bottom)); transform:translateX(-50%); background:#1c1c20; border:1px solid var(--border); padding:11px 18px; border-radius:99px; font-size:12.5px; font-weight:700; z-index:80; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition: opacity .25s ease, transform .25s ease; }
+.toast{ position:fixed; left:50%; bottom:calc(110px + var(--safe-bottom)); transform:translateX(-50%); max-width:calc(100vw - 48px); text-align:center; background:#1c1c20; border:1px solid var(--border); padding:11px 18px; border-radius:16px; font-size:12.5px; font-weight:700; z-index:80; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition: opacity .25s ease, transform .25s ease; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
 canvas{ display:block; width:100%; max-width:100%; }
 .auth-screen{ height:100vh; height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:16px; box-sizing:border-box; }
@@ -466,25 +466,40 @@ function urlBase64ToUint8Array(base64String){
   for(let i=0; i<rawData.length; i++) arr[i] = rawData.charCodeAt(i);
   return arr;
 }
+let swRegistrationError = null;
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label}: tempo esgotado. O Service Worker não respondeu — confira se sw.js está publicado no seu site.`)), ms)),
+  ]);
+}
 async function getPushSubscriptionStatus(){
   if(!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   if(Notification.permission === 'denied') return 'denied';
+  if(swRegistrationError) return 'not-subscribed';
   try{
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await withTimeout(navigator.serviceWorker.ready, 8000, 'Service Worker');
     const sub = await reg.pushManager.getSubscription();
     return sub ? 'subscribed' : 'not-subscribed';
-  }catch(e){ return 'not-subscribed'; }
+  }catch(e){ console.warn('push status check failed', e); return 'not-subscribed'; }
 }
 async function subscribeToPush(){
   if(!CLOUD_ENABLED || !session){ toast('Conecte a nuvem para ativar notificações'); return; }
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){ toast('Seu navegador não suporta notificações push'); return; }
+  if(swRegistrationError){
+    toast('Service Worker não registrou: ' + (swRegistrationError.message || swRegistrationError));
+    return;
+  }
   try{
     const perm = await Notification.requestPermission();
     if(perm !== 'granted'){ toast('Permissão de notificação negada'); render(); return; }
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await withTimeout(navigator.serviceWorker.ready, 8000, 'Service Worker');
     let sub = await reg.pushManager.getSubscription();
     if(!sub){
-      sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+      sub = await withTimeout(
+        reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) }),
+        8000, 'Inscrição push'
+      );
     }
     const j = sub.toJSON();
     const { error } = await sb.from('push_subscriptions').upsert(
@@ -495,7 +510,7 @@ async function subscribeToPush(){
     toast('Notificações ativadas!');
   }catch(err){
     console.warn('push subscribe failed', err);
-    toast('Não foi possível ativar notificações.');
+    toast((err && err.message) ? err.message : 'Não foi possível ativar notificações.');
   }
   render();
 }
@@ -719,7 +734,9 @@ function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg){
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+  clearTimeout(toast._t);
+  const dur = Math.min(6000, Math.max(2200, msg.length*60));
+  toast._t = setTimeout(()=>t.classList.remove('show'), dur);
 }
 
 function txForMonth(offset=0){
@@ -2853,7 +2870,10 @@ async function continueBoot(){
     if(!state.onboarded){ setTimeout(openOnboarding, 350); }
   }
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').catch(err=>{
+      swRegistrationError = err;
+      console.error('Falha ao registrar o Service Worker (sw.js):', err);
+    });
   }
 }
 boot();
